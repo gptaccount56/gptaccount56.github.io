@@ -16,56 +16,151 @@
 </div></section><section id="paymentPanel" class="panel"><div class="payment-head"><div><h2>Payment Status</h2><p id="paymentSubtitle"></p></div><div class="badge">Current</div></div><div id="paymentView"></div><button id="historyButton" class="history" type="button">View Full Payment History</button></section></main></section>
 <script>
 /* ==========================================================
-   EDIT EVERYTHING HERE
+   GOOGLE SHEETS CONNECTION
+
+   1. Create tabs named: Settings, Users, Payments
+   2. In Google Sheets choose File > Share > Publish to web.
+   3. Paste the spreadsheet ID below. It is the text between
+      /d/ and /edit in the Google Sheets URL.
+
+   If SHEET_ID is left as the placeholder, the local fallback
+   values below are used so the mockup still works.
    ========================================================== */
-const ADMIN_PASSWORD = "admin123";
-const ACCOUNT_PASSWORD = "GooningToJennyMod";
-const TOTP_SECRET = "I64G6ZKYTWMEOGDWJ67QRVZRS2K3JUAK";
-const SITE_SETTINGS = { accountEmail:"gpt.dance632@passinbox.com", historyStart:"2026-07" };
-const USERS = {
-  antone:  { name:"Antone",  loginPassword:"58321", dueDay:15, paidMonths:["2026-07","2026-08","2026-09"], naMonths:[] },
-  vincent: { name:"Vincent", loginPassword:"74196", dueDay:15, paidMonths:["2026-07"], naMonths:[] },
-  gabe:    { name:"Gabe",    loginPassword:"32684", dueDay:20, paidMonths:["2026-08"], naMonths:["2026-07"] },
-  enzo:    { name:"Enzo",    loginPassword:"91547", dueDay:15, paidMonths:["2026-07","2026-08"], naMonths:[] }
+const SHEET_ID = "1-NMyUrAo4x-czPCPmtEcd4sPs81IVTUo3KmQpk0uOyg";
+
+/* Local fallback values. The Google Sheet replaces these when connected. */
+let ADMIN_PASSWORD = "admin123";
+let ACCOUNT_PASSWORD = "GooningToJennyMod";
+let TOTP_SECRET = "I64G6ZKYTWMEOGDWJ67QRVZRS2K3JUAK";
+let SITE_SETTINGS = {
+  siteTitle:"GPT Account Portal",
+  accountEmail:"gpt.dance632@passinbox.com",
+  historyStart:"2026-07",
+  loadingMs:1000
 };
-/* Add a month such as "2026-10" to paidMonths when that person pays. */
+let USERS = {
+  antone:  { name:"Antone",  loginPassword:"58321", dueDay:15, paidMonths:["2026-07","2026-08","2026-09"], naMonths:[], overrides:{} },
+  vincent: { name:"Vincent", loginPassword:"74196", dueDay:15, paidMonths:["2026-07"], naMonths:[], overrides:{} },
+  gabe:    { name:"Gabe",    loginPassword:"32684", dueDay:20, paidMonths:["2026-08"], naMonths:["2026-07"], overrides:{} },
+  enzo:    { name:"Enzo",    loginPassword:"91547", dueDay:15, paidMonths:["2026-07","2026-08"], naMonths:[], overrides:{} }
+};
 
 (function(){
 "use strict";
-let currentUser = null;
-let showFullHistory = false;
-const el = id => document.getElementById(id);
-const loadingPage=el("loadingPage"), loginPage=el("loginPage"), portal=el("portal"), input=el("loginPassword"), error=el("error");
-let accountPasswordVisible=false;
-let totpTimer=null;
+let currentUser=null, showFullHistory=false, accountPasswordVisible=false, totpTimer=null;
+const el=id=>document.getElementById(id);
+const loadingPage=el("loadingPage"),loginPage=el("loginPage"),portal=el("portal"),input=el("loginPassword"),error=el("error");
 function safeSet(k,v){try{localStorage.setItem(k,v)}catch(_){}}
 function safeGet(k){try{return localStorage.getItem(k)}catch(_){return null}}
 function safeRemove(k){try{localStorage.removeItem(k)}catch(_){}}
 function setPanel(name){document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.panel===name));document.querySelectorAll(".panel").forEach(x=>x.classList.toggle("active",x.id===name));}
+
+/* ---------- Google Sheets loader ---------- */
+function sheetConnected(){return SHEET_ID && !SHEET_ID.includes("PASTE_GOOGLE");}
+function csvURL(tab){return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}&_=${Date.now()}`;}
+function parseCSV(text){
+  const rows=[]; let row=[],cell="",quoted=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(c==='"'&&quoted&&n==='"'){cell+='"';i++;}
+    else if(c==='"'){quoted=!quoted;}
+    else if(c===','&&!quoted){row.push(cell);cell="";}
+    else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&n==='\n')i++;row.push(cell);if(row.some(v=>v!==""))rows.push(row);row=[];cell="";}
+    else cell+=c;
+  }
+  row.push(cell); if(row.some(v=>v!==""))rows.push(row); return rows;
+}
+async function getTab(name){
+  const r=await fetch(csvURL(name),{cache:"no-store"});
+  if(!r.ok)throw new Error(`Could not load ${name}`);
+  return parseCSV(await r.text());
+}
+function truthy(v){return !["false","0","no","off"].includes(String(v??"").trim().toLowerCase());}
+async function loadSheetData(){
+  if(!sheetConnected())return;
+  const [settingsRows,userRows,paymentRows]=await Promise.all([getTab("Settings"),getTab("Users"),getTab("Payments")]);
+
+  /* Settings tab: Key | Value */
+  const settings={};
+  settingsRows.slice(1).forEach(r=>{const k=String(r[0]||"").trim();if(k)settings[k]=String(r[1]??"").trim();});
+  if(settings.siteTitle)SITE_SETTINGS.siteTitle=settings.siteTitle;
+  if(settings.accountEmail)SITE_SETTINGS.accountEmail=settings.accountEmail;
+  if(settings.historyStart)SITE_SETTINGS.historyStart=settings.historyStart;
+  if(settings.loadingMs&&!Number.isNaN(Number(settings.loadingMs)))SITE_SETTINGS.loadingMs=Math.max(0,Number(settings.loadingMs));
+  if(settings.adminPassword)ADMIN_PASSWORD=settings.adminPassword;
+  if(settings.accountPassword)ACCOUNT_PASSWORD=settings.accountPassword;
+  if(settings.totpSecret)TOTP_SECRET=settings.totpSecret.replace(/\s+/g,"");
+
+  /* Users tab: ID | Name | LoginPassword | DueDay | Enabled */
+  const loadedUsers={};
+  userRows.slice(1).forEach(r=>{
+    const id=String(r[0]||"").trim().toLowerCase();
+    if(!id||!truthy(r[4]||"TRUE"))return;
+    loadedUsers[id]={name:String(r[1]||id).trim(),loginPassword:String(r[2]||"").trim(),dueDay:Math.min(31,Math.max(1,Number(r[3])||1)),paidMonths:[],naMonths:[],overrides:{}};
+  });
+  if(Object.keys(loadedUsers).length)USERS=loadedUsers;
+
+  /* Payments tab: UserID | Month | Status
+     Status can be Paid, N/A, Unpaid, Not Due, or blank. */
+  paymentRows.slice(1).forEach(r=>{
+    const id=String(r[0]||"").trim().toLowerCase();
+    const month=String(r[1]||"").trim();
+    const st=String(r[2]||"").trim();
+    if(!USERS[id]||!/^\d{4}-\d{2}$/.test(month)||!st)return;
+    if(st.toLowerCase()==="paid")USERS[id].paidMonths.push(month);
+    else if(st.toLowerCase()==="n/a")USERS[id].naMonths.push(month);
+    else USERS[id].overrides[month]=st;
+  });
+}
+function applySiteSettings(){
+  document.title=SITE_SETTINGS.siteTitle||"GPT Account Portal";
+  document.querySelectorAll(".brand").forEach(b=>{const img=b.querySelector("img");b.textContent="";if(img)b.appendChild(img);b.appendChild(document.createTextNode(" "+(SITE_SETTINGS.siteTitle||"GPT Account Portal")));});
+}
+
+/* ---------- Login ---------- */
 function login(){const value=input.value.trim();if(value===ADMIN_PASSWORD){safeSet("gptPortalUser","admin");openUser("admin");return;}const match=Object.keys(USERS).find(id=>USERS[id].loginPassword===value);if(match){safeSet("gptPortalUser",match);openUser(match);return;}error.textContent="Incorrect password.";}
 function openUser(id){if(id!=="admin"&&!USERS[id])return;currentUser=id;loadingPage.classList.add("hidden");loginPage.classList.add("hidden");portal.classList.remove("hidden");input.value="";error.textContent="";showFullHistory=false;el("historyButton").textContent="View Full Payment History";renderUser();}
-function logout(){safeRemove("gptPortalUser");currentUser=null;portal.classList.add("hidden");loadingPage.classList.add("hidden");loginPage.classList.remove("hidden");input.value="";error.textContent="";el("pwTab").classList.remove("hidden");setPanel("pwPanel");setTimeout(()=>input.focus(),0);}
+function logout(){safeRemove("gptPortalUser");currentUser=null;if(totpTimer){clearInterval(totpTimer);totpTimer=null;}portal.classList.add("hidden");loadingPage.classList.add("hidden");loginPage.classList.remove("hidden");input.value="";error.textContent="";el("pwTab").classList.remove("hidden");setPanel("pwPanel");setTimeout(()=>input.focus(),0);}
 function renderUser(){const admin=currentUser==="admin";el("portalTitle").textContent=admin?"Admin Dashboard":"ChatGPT Account";el("welcomeText").textContent=admin?"Signed in as Admin":"Signed in as "+USERS[currentUser].name;el("pwTab").classList.toggle("hidden",admin);if(admin){el("paymentSubtitle").textContent="Everyone's monthly payment status";setPanel("paymentPanel");}else{el("accountName").textContent=USERS[currentUser].name;el("accountEmail").textContent=SITE_SETTINGS.accountEmail;el("paymentSubtitle").textContent=USERS[currentUser].name+"'s monthly payment history";accountPasswordVisible=false;renderAccountPassword();updateTotp();if(totpTimer)clearInterval(totpTimer);totpTimer=setInterval(updateTotp,1000);setPanel("pwPanel");}renderPayments();}
+
+/* ---------- Payments ---------- */
 function key(y,m){return y+"-"+String(m+1).padStart(2,"0")}
-function status(user,y,m){const k=key(y,m);if(user.paidMonths.includes(k))return "Paid";if((user.naMonths||[]).includes(k))return "N/A";const last=new Date(y,m+1,0).getDate();const due=new Date(y,m,Math.min(user.dueDay,last),0,0,0,0);return new Date()<due?"Not Due":"Unpaid";}
+function status(user,y,m){const k=key(y,m);if(user.overrides&&user.overrides[k])return user.overrides[k];if(user.paidMonths.includes(k))return "Paid";if((user.naMonths||[]).includes(k))return "N/A";const last=new Date(y,m+1,0).getDate();const due=new Date(y,m,Math.min(user.dueDay,last),0,0,0,0);return new Date()<due?"Not Due":"Unpaid";}
 function monthsRecent(){const a=[],n=new Date();for(let o=-2;o<=0;o++){const d=new Date(n.getFullYear(),n.getMonth()+o,1);a.push({y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleString(undefined,{month:"short",year:"numeric"})});}return a;}
 function monthsAll(){const a=[];const parts=SITE_SETTINGS.historyStart.split("-").map(Number);const d=new Date(parts[0],parts[1]-1,1),n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),1);while(d<=end){a.push({y:d.getFullYear(),m:d.getMonth(),label:d.toLocaleString(undefined,{month:"short",year:"numeric"})});d.setMonth(d.getMonth()+1);}return a;}
 function statusHTML(s){const c=s==="Paid"?"paid":s==="Unpaid"?"unpaid":s==="Not Due"?"notdue":"na";return '<span class="status '+c+'">'+s+'</span>';}
 function dueLabel(u,y,m){const day=Math.min(u.dueDay,new Date(y,m+1,0).getDate());return new Date(y,m,day).toLocaleDateString(undefined,{month:"short",day:"numeric"});}
 function renderPayments(){const ms=showFullHistory?monthsAll():monthsRecent(),view=el("paymentView");if(currentUser==="admin"){view.className="adminView";let h='<div class="tablebox"><table><thead><tr><th>Name</th>';ms.forEach(m=>h+='<th>'+m.label+'</th>');h+='</tr></thead><tbody>';Object.values(USERS).forEach(u=>{h+='<tr><td><strong>'+u.name+'</strong></td>';ms.forEach(m=>h+='<td>'+statusHTML(status(u,m.y,m.m))+'</td>');h+='</tr>';});h+='</tbody></table></div>';view.innerHTML=h;}else{view.className="userView";const u=USERS[currentUser];let d='<div class="tablebox"><table><thead><tr><th>Month</th><th>Due</th><th>Status</th></tr></thead><tbody>';let mobile='<div class="mobile">';ms.forEach(m=>{const s=status(u,m.y,m.m),due=dueLabel(u,m.y,m.m);d+='<tr><td>'+m.label+'</td><td>'+due+'</td><td>'+statusHTML(s)+'</td></tr>';mobile+='<div class="mcard"><div class="mrow"><div><div>'+m.label+'</div><div class="small">Due '+due+'</div></div>'+statusHTML(s)+'</div></div>';});view.innerHTML=d+'</tbody></table></div>'+mobile+'</div>';}}
 
+/* ---------- Account password / copy ---------- */
 function renderAccountPassword(){const node=el("accountPassword");if(!node)return;node.textContent=accountPasswordVisible?ACCOUNT_PASSWORD:"•".repeat(Math.max(12,ACCOUNT_PASSWORD.length));el("toggleAccountPassword").textContent=accountPasswordVisible?"Hide":"Unhide";}
 function copyText(text,button){const done=()=>{const old=button.textContent;button.textContent="Copied";setTimeout(()=>button.textContent=old,900)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done));}else fallbackCopy(text,done);}
 function fallbackCopy(text,done){const ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(_){}ta.remove();}
+
+/* ---------- TOTP ---------- */
 function base32Decode(str){const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits="",out=[];str=str.replace(/=+$/g,"").replace(/\s+/g,"").toUpperCase();for(const ch of str){const v=alphabet.indexOf(ch);if(v<0)continue;bits+=v.toString(2).padStart(5,"0");}for(let i=0;i+8<=bits.length;i+=8)out.push(parseInt(bits.slice(i,i+8),2));return out;}
 function rol(n,b){return ((n<<b)|(n>>>(32-b)))>>>0;}
 function sha1(bytes){const ml=bytes.length*8,a=bytes.slice();a.push(0x80);while((a.length%64)!==56)a.push(0);for(let i=7;i>=0;i--)a.push((ml/Math.pow(256,i))&255);let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;for(let off=0;off<a.length;off+=64){const w=new Array(80);for(let i=0;i<16;i++){const j=off+i*4;w[i]=((a[j]<<24)|(a[j+1]<<16)|(a[j+2]<<8)|a[j+3])>>>0;}for(let i=16;i<80;i++)w[i]=rol((w[i-3]^w[i-8]^w[i-14]^w[i-16])>>>0,1);let A=h0,B=h1,C=h2,D=h3,E=h4;for(let i=0;i<80;i++){let f,k;if(i<20){f=(B&C)|((~B)&D);k=0x5A827999;}else if(i<40){f=B^C^D;k=0x6ED9EBA1;}else if(i<60){f=(B&C)|(B&D)|(C&D);k=0x8F1BBCDC;}else{f=B^C^D;k=0xCA62C1D6;}const t=(rol(A,5)+f+E+k+w[i])>>>0;E=D;D=C;C=rol(B,30);B=A;A=t;}h0=(h0+A)>>>0;h1=(h1+B)>>>0;h2=(h2+C)>>>0;h3=(h3+D)>>>0;h4=(h4+E)>>>0;}const out=[];for(const h of [h0,h1,h2,h3,h4])out.push((h>>>24)&255,(h>>>16)&255,(h>>>8)&255,h&255);return out;}
 function hmacSha1(key,msg){if(key.length>64)key=sha1(key);key=key.concat(new Array(64-key.length).fill(0));const o=key.map(x=>x^0x5c),i=key.map(x=>x^0x36);return sha1(o.concat(sha1(i.concat(msg))));}
 function totpAt(ms){const counter=Math.floor(ms/30000),msg=new Array(8).fill(0);let n=counter;for(let i=7;i>=0;i--){msg[i]=n&255;n=Math.floor(n/256);}const hash=hmacSha1(base32Decode(TOTP_SECRET),msg),off=hash[19]&15,bin=((hash[off]&127)<<24)|(hash[off+1]<<16)|(hash[off+2]<<8)|hash[off+3];return String((bin>>>0)%1000000).padStart(6,"0");}
 function updateTotp(){const node=el("totpCode");if(!node)return;node.textContent=totpAt(Date.now());const left=30-(Math.floor(Date.now()/1000)%30);el("totpMeta").textContent="Refreshes in "+left+" second"+(left===1?"":"s");}
+
+/* ---------- Controls ---------- */
 function toggleShow(){const showing=input.type==="text";input.type=showing?"password":"text";el("showPassword").textContent=showing?"Show":"Hide";input.focus();}
 el("loginButton").onclick=login;el("showPassword").onclick=toggleShow;el("toggleAccountPassword").onclick=function(){accountPasswordVisible=!accountPasswordVisible;renderAccountPassword();};el("copyAccountPassword").onclick=function(){copyText(ACCOUNT_PASSWORD,this);};el("copyTotp").onclick=function(){copyText(el("totpCode").textContent,this);};el("logoutButton").onclick=logout;input.onkeydown=e=>{if(e.key==="Enter")login();};el("historyButton").onclick=function(){showFullHistory=!showFullHistory;this.textContent=showFullHistory?"Show Recent Payments":"View Full Payment History";renderPayments();};document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setPanel(t.dataset.panel));
-const remembered=safeGet("gptPortalUser");setTimeout(function(){if(remembered==="admin"||Object.prototype.hasOwnProperty.call(USERS,remembered)){openUser(remembered);}else{loadingPage.classList.add("hidden");loginPage.classList.remove("hidden");input.focus();}},1000);
-window.__portalTest={login,logout,openUser,status,USERS};
+
+/* ---------- Startup: sheet -> 1 second mask -> auto login/login ---------- */
+(async function start(){
+  const started=Date.now();
+  try{await loadSheetData();}catch(e){console.warn("Google Sheet could not be loaded; using local fallback data.",e);}
+  applySiteSettings();
+  const wait=Math.max(0,(Number(SITE_SETTINGS.loadingMs)||1000)-(Date.now()-started));
+  await new Promise(r=>setTimeout(r,wait));
+  const remembered=safeGet("gptPortalUser");
+  if(remembered==="admin"||Object.prototype.hasOwnProperty.call(USERS,remembered))openUser(remembered);
+  else{loadingPage.classList.add("hidden");loginPage.classList.remove("hidden");input.focus();}
+})();
+
+window.__portalTest={login,logout,openUser,status,get USERS(){return USERS;},loadSheetData};
 })();
 </script></body></html>
