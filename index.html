@@ -83,16 +83,38 @@ const pill=s=>`<span class="pill ${s.replaceAll(" ","")}">${esc(s)}</span>`;
 async function load(){let[a,u,p]=await Promise.all([api("account?select=*&order=id.asc&limit=1"),api("users?select=*&order=name.asc"),api("payments?select=*&order=month.desc")]);if(a[0])D.account=a[0];D.users=u;D.payments=p;$("brand").textContent=D.account.site_title;$("sync").textContent=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dba").textContent=a.length+" row";$("dbu").textContent=u.length+" rows";$("dbp").textContent=p.length+" rows"}
 function msg(id,t,ok=true){let e=$(id);e.textContent=t;e.style.color=ok?"#a3a9ae":"#ff8989";e.classList.remove("hide");setTimeout(()=>e.classList.add("hide"),3500)}
 function page(id){document.querySelectorAll(".page").forEach(e=>e.classList.toggle("active",e.id===id));document.querySelectorAll(".nav").forEach(e=>e.classList.toggle("active",e.dataset.p===id))}
-function openApp(id){who=id;try{localStorage.setItem("portalSession",id)}catch(e){}$("login").classList.add("hide");$("app").classList.remove("hide");$("app").classList.toggle("user",id!=="admin");let u=D.users.find(x=>x.id===id);$("role").textContent=id==="admin"?"Administrator":"Member";$("hello").textContent=id==="admin"?"Admin dashboard":"Hi, "+(u?.name||"");$("lead").textContent=id==="admin"?"Manage payments, users, settings, and database data.":"View your account information and payment history.";render();page("overview")}
+function openApp(id){who=id;$("login").classList.add("hide");$("app").classList.remove("hide");$("app").classList.toggle("user",id!=="admin");let u=D.users.find(x=>x.id===id);$("role").textContent=id==="admin"?"Administrator":"Member";$("hello").textContent=id==="admin"?"Admin dashboard":"Hi, "+(u?.name||"");$("lead").textContent=id==="admin"?"Manage payments, users, settings, and database data.":"View your account information and payment history.";render();page("overview")}
+function setPortalCookie(name,value,days=30){
+  try{
+    const maxAge=Math.max(0,Math.floor(days*86400));
+    document.cookie=encodeURIComponent(name)+"="+encodeURIComponent(value)+"; Max-Age="+maxAge+"; Path=/; SameSite=Lax";
+  }catch(e){}
+}
+function getPortalCookie(name){
+  try{
+    const key=encodeURIComponent(name)+"=";
+    const part=document.cookie.split("; ").find(x=>x.startsWith(key));
+    return part?decodeURIComponent(part.slice(key.length)):"";
+  }catch(e){return ""}
+}
+function rememberLogin(id,pin){
+  try{localStorage.setItem("portalSession",id);localStorage.setItem("portalSavedPin",pin)}catch(e){}
+  setPortalCookie("portal_user",id,30);
+  setPortalCookie("portal_pin",pin,30);
+}
+function clearRememberedLogin(){
+  try{localStorage.removeItem("portalSession");localStorage.removeItem("portalSavedPin")}catch(e){}
+  setPortalCookie("portal_user","",-1);setPortalCookie("portal_pin","",-1);
+}
 function login(){
   let v=$("loginInput").value.replace(/\D/g,"").slice(0,5);
   $("loginInput").value=v;
   if(v.length!==5){$("loginErr").textContent="Enter a 5-digit PIN.";return}
   // Admin still works through its assigned PIN, but the login screen is PIN-only.
-  if(v===String(L.adminPin||"00000"))return openApp("admin");
+  if(v===String(L.adminPin||"00000")){rememberLogin("admin",v);return openApp("admin")};
   let id=Object.keys(L.pins).find(k=>String(L.pins[k])===v);
   let u=D.users.find(x=>x.id===id&&x.enabled);
-  if(u)return openApp(id);
+  if(u){rememberLogin(id,v);return openApp(id)};
   $("loginErr").textContent="Incorrect PIN.";
 }
 function months(){let out=[],[y,m]=String(D.account.history_start||"2026-07").split("-").map(Number);m--;while(mk(y,m)<=cur()){out.push(mk(y,m));if(++m>11){m=0;y++}if(out.length>120)break}return out.reverse()}
@@ -167,7 +189,7 @@ function b32(s){let A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",bits="",o=[];for(let c 
 async function totp(){try{let c=Math.floor(Date.now()/30000),buf=new ArrayBuffer(8),v=new DataView(buf);v.setUint32(4,c,false);let k=await crypto.subtle.importKey("raw",b32(L.totpSecret),{name:"HMAC",hash:"SHA-1"},false,["sign"]),s=new Uint8Array(await crypto.subtle.sign("HMAC",k,buf)),o=s[19]&15,n=((s[o]&127)<<24|(s[o+1]&255)<<16|(s[o+2]&255)<<8|(s[o+3]&255))%1e6;$("code").textContent=String(n).padStart(6,"0");$("count").textContent="Refreshes in "+(30-Math.floor(Date.now()/1000)%30)+"s"}catch{$("code").textContent="------"}}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>page(b.dataset.p));$("loginBtn").onclick=login;
 $("loginInput").oninput=e=>{e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""};
-$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{try{localStorage.removeItem("portalSession")}catch(e){}location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};
+$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{clearRememberedLogin();location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};
 let createStep=1;
 function openCreateUser(){
   createStep=1;
@@ -218,11 +240,23 @@ async function createUser(){
   const id=$("newId").value.trim(), name=$("newName").value.trim(), pin=cleanNewPin(), due=parseInt($("newDue").value,10), enabled=$("newEnabled").value==="true";
   $("createNext").disabled=true;$("createNext").textContent="Creating…";
   try{
+    // Re-check the live database in case the ID was created since the wizard opened.
+    const existing=await api("users?id=eq."+encodeURIComponent(id)+"&select=id");
+    if(Array.isArray(existing)&&existing.length){
+      msg("createUserMsg","That User ID already exists. Choose a different User ID.",false);
+      createStep=1;updateCreateStep();$("newId").focus();return;
+    }
     await api("users",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({id,name,due_day:due,enabled})});
     L.pins[id]=pin;try{localStorage.setItem("portalLocal",JSON.stringify(L))}catch(e){}
     selectedEditUser=id;await load();render();closeCreateUser();
     $("editUserSelect").value=id;fillUserEditor();setUserTab("info");msg("userMsg","User created.");
-  }catch(e){msg("createUserMsg","Could not create user: "+e.message,false)}
+  }catch(e){
+    const em=String(e&&e.message||e);
+    if(em.includes("23505")||em.toLowerCase().includes("duplicate key")){
+      msg("createUserMsg","That User ID already exists. Choose a different User ID.",false);
+      createStep=1;updateCreateStep();
+    }else msg("createUserMsg","Could not create user: "+em,false);
+  }
   finally{$("createNext").disabled=false;$("createNext").textContent=createStep===3?"Create user":"Next"}
 }
 $("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};
@@ -247,12 +281,14 @@ $("editUserPin").oninput=e=>{e.target.value=String(e.target.value||"").normalize
       load(),
       new Promise((_,reject)=>setTimeout(()=>reject(new Error("Database timeout")),2500))
     ]);
-    const remembered=(()=>{try{return localStorage.getItem("portalSession")}catch(e){return null}})();
-    if(remembered==="admin"||D.users.some(u=>u.id===remembered&&u.enabled)){
-      openApp(remembered);
-    }else{
-      render();
-    }
+    let remembered=null,savedPin="";
+    try{remembered=localStorage.getItem("portalSession");savedPin=localStorage.getItem("portalSavedPin")||""}catch(e){}
+    if(!remembered)remembered=getPortalCookie("portal_user");
+    if(!savedPin)savedPin=getPortalCookie("portal_pin");
+    const validAdmin=remembered==="admin"&&savedPin===String(L.adminPin||"00000");
+    const validUser=D.users.some(u=>u.id===remembered&&u.enabled)&&String(L.pins[remembered]||"")===savedPin;
+    if(validAdmin||validUser)openApp(remembered);
+    else render();
   }catch(e){
     // Keep login available even if storage/cookies/database features are unavailable.
   }
