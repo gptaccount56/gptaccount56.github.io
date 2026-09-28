@@ -128,7 +128,7 @@ function b32(s){let A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",bits="",o=[];for(let c 
 async function totp(){try{let c=Math.floor(Date.now()/30000),buf=new ArrayBuffer(8),v=new DataView(buf);v.setUint32(4,c,false);let k=await crypto.subtle.importKey("raw",b32(L.totpSecret),{name:"HMAC",hash:"SHA-1"},false,["sign"]),s=new Uint8Array(await crypto.subtle.sign("HMAC",k,buf)),o=s[19]&15,n=((s[o]&127)<<24|(s[o+1]&255)<<16|(s[o+2]&255)<<8|(s[o+3]&255))%1e6;$("code").textContent=String(n).padStart(6,"0");$("count").textContent="Refreshes in "+(30-Math.floor(Date.now()/1000)%30)+"s"}catch{$("code").textContent="------"}}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>page(b.dataset.p));$("loginBtn").onclick=login;
 $("loginInput").oninput=e=>{e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""};
-$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{try{localStorage.removeItem("portalSession")}catch(e){}location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};$("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=()=>setUserTab("payments");$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings;$("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
+$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{try{localStorage.removeItem("portalSession")}catch(e){}location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};$("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=()=>setUserTab("payments");$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings; $("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
 (async()=>{
   // Show the login UI immediately; no loading screen.
   $("login").classList.remove("hide");
@@ -154,4 +154,16 @@ $("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()
 
   totp();
   setInterval(totp,1000);
-})();</script></body></html>
+})();</script>
+<script>
+window.addEventListener("DOMContentLoaded",function(){
+  var login=document.getElementById("login");
+  var app=document.getElementById("app");
+  if(login && (!app || app.classList.contains("hide"))){
+    login.classList.remove("hide");
+    login.style.display="";
+  }
+});
+</script>
+
+</body></html>
