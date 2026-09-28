@@ -429,7 +429,7 @@ tr:last-child td{border-bottom:0}
             <input id="editUserPayment" readonly>
           </div>
           <div class="field">
-            <label for="editUserDueDate">Current month due date</label>
+            <label for="editUserDueDate">Next due date</label>
             <input id="editUserDueDate" readonly>
           </div>
         </div>
@@ -584,6 +584,19 @@ function dueDateForMonth(u,k){
 }
 function dueDateLabel(u,k){
   return dueDateForMonth(u,k).toLocaleDateString(undefined,{month:"long",day:"numeric",year:"numeric"});
+}
+function nextMonthKey(k){
+  let [y,m]=String(k).split("-").map(Number);
+  m++;
+  if(m>12){m=1;y++}
+  return String(y)+"-"+String(m).padStart(2,"0");
+}
+function nextDueMonth(u){
+  const current=cur();
+  const due=dueDateForMonth(u,current);
+  const now=new Date();
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  return today>due?nextMonthKey(current):current;
 }
 function status(u,k){
   if(!u||!u.enabled)return "N/A";
@@ -757,11 +770,13 @@ function renderPayments(){
   if(!u){$("userPaymentView").innerHTML='<div class="card">User account could not be loaded.</div>';return}
   const ks=monthsForUser(u);
   const current=status(u,cur());
+  const dueMonth=nextDueMonth(u);
+  const dueStatus=status(u,dueMonth);
   $("userPaymentView").innerHTML=
     '<div class="ey">Member</div><h1>Payment Statuses</h1><p class="lead">View your current payment status and monthly history.</p>'+
-    '<div class="card"><div class="muted">Current month</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;flex-wrap:wrap"><div><strong>'+esc(label(cur()))+'</strong><div class="tiny" style="margin-top:4px">Due '+esc(dueDateLabel(u,cur()))+'</div></div>'+pill(current)+'</div></div>'+
+    '<div class="card"><div class="muted">Next payment due</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;flex-wrap:wrap"><div><strong>'+esc(label(dueMonth))+'</strong><div class="tiny" style="margin-top:4px">Due '+esc(dueDateLabel(u,dueMonth))+'</div></div>'+pill(dueStatus)+'</div></div>'+
     '<div class="table section"><table><thead><tr><th>Month</th><th>Due date</th><th>Status</th></tr></thead><tbody>'+
-    ks.map(k=>`<tr><td>${esc(label(k))}</td><td>${k===cur()?esc(dueDateLabel(u,k)):"—"}</td><td>${pill(status(u,k))}</td></tr>`).join("")+
+    ks.map(k=>`<tr><td>${esc(label(k))}</td><td>${k===nextDueMonth(u)?esc(dueDateLabel(u,k)):"—"}</td><td>${pill(status(u,k))}</td></tr>`).join("")+
     '</tbody></table></div>';
 }
 
@@ -978,7 +993,8 @@ function fillUserEditor(){
   $("editUserDue").value=Number(u.due_day)||1;
   $("editUserEnabled").value=String(!!u.enabled);
   $("editUserPayment").value=status(u,cur());
-  $("editUserDueDate").value=dueDateLabel(u,cur());
+  const nextDue=nextDueMonth(u);
+  $("editUserDueDate").value=dueDateLabel(u,nextDue);
 
   const paid=D.payments.filter(p=>p.user_id===u.id).sort((a,b)=>b.month.localeCompare(a.month));
   $("editUserPaidMonths").textContent=paid.length?paid.map(p=>`${label(p.month)} — ${p.status}`).join(", "):"None";
@@ -987,11 +1003,13 @@ function fillUserEditor(){
   $("editUserHistoryStart").textContent=userMonths.length?label(userMonths[userMonths.length-1]):label(cur());
 
   $("editUserMonthHistory").innerHTML=userMonths.map(k=>{
+    const nextDue=nextDueMonth(u);
+    const isNextDue=k===nextDue;
     const isCurrent=k===cur();
-    return `<div class="monthStatusCard${isCurrent?" current":""}">
+    return `<div class="monthStatusCard${isNextDue?" current":""}">
       <div>
         <div class="monthStatusName">${esc(label(k))}</div>
-        <div class="tiny">${isCurrent?"Current month · Due "+esc(dueDateLabel(u,k)):"Past month"}</div>
+        <div class="tiny">${isNextDue?"Next due · "+esc(dueDateLabel(u,k)):(isCurrent?"Current month":"Past month")}</div>
       </div>
       ${pill(status(u,k))}
     </div>`;
@@ -1014,7 +1032,7 @@ function renderSimpleUserPayment(u){
       : '<span class="muted">Automatic</span>';
     return `<tr>
       <td>${esc(label(k))}</td>
-      <td>${k===cur()?esc(dueDateLabel(u,k)):"—"}</td>
+      <td>${k===nextDueMonth(u)?esc(dueDateLabel(u,k)):"—"}</td>
       <td>${pill(status(u,k))}</td>
       <td>${entry}</td>
       <td style="text-align:right">${point?`<button class="deletePay userDeletePoint" data-id="${esc(point.id)}" type="button" aria-label="Delete status record">×</button>`:""}</td>
