@@ -110,8 +110,21 @@
 const C={"url": "https://sqyzrwweppxwdqndwkmj.supabase.co", "key": "sb_publishable_63SdwJ_jls5p3biBOaObhg_pHEJ9z2h", "admin": "admin123", "email": "gpt.dance632@passinbox.com", "password": "GooningToJennyMod", "totp": "I64G6ZKYTWMEOGDWJ67QRVZRS2K3JUAK", "pins": {"antone": "58321", "vincent": "74196", "gabe": "32684", "enzo": "91547"}};let savedLocal={};try{savedLocal=JSON.parse(localStorage.getItem("portalLocal")||"{}")}catch(e){}
 let L=Object.assign({adminPin:"00000",adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins},savedLocal);
 if(!/^\d{5}$/.test(String(L.adminPin||"")))L.adminPin="00000";L.pins=Object.assign({},C.pins,L.pins||{});
-let D={account:{id:1,site_title:"GPT Account Portal",history_start:"2026-07",loading_ms:1000},users:[],payments:[]},who=null,pwVisible=false;
+let D={account:{id:1,site_title:"GPT Account Portal",history_start:"2026-07",loading_ms:1000},users:[],payments:[]},who=null,pwVisible=false,selectedEditUser="",createStep=1;
 const $=x=>document.getElementById(x), esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function mk(y,m){return String(y)+"-"+String(m+1).padStart(2,"0")}
+function cur(){const d=new Date();return mk(d.getFullYear(),d.getMonth())}
+function label(k){const [y,m]=String(k).split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})}
+function status(u,k){
+  if(!u||!u.enabled)return "N/A";
+  if(D.payments.some(p=>p.user_id===u.id&&p.month===k))return "Paid";
+  if(k>cur())return "Not Due";
+  if(k<cur())return "Unpaid";
+  const d=new Date(),last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  return d.getDate()>=Math.min(Number(u.due_day)||1,last)?"Unpaid":"Not Due";
+}
+function pill(v){const cls=v==="Paid"?"paid":v==="Unpaid"?"unpaid":v==="N/A"?"na":"notdue";return `<span class="pill ${cls}">${esc(v)}</span>`}
 async function api(path,opt={}){
   const headers={apikey:C.key,Authorization:"Bearer "+C.key,...(opt.headers||{})};
   if(opt.body&&!headers["Content-Type"])headers["Content-Type"]="application/json";
@@ -121,7 +134,7 @@ async function api(path,opt={}){
   if(!raw)return null;
   try{return JSON.parse(raw)}catch(e){return raw}
 }
-async function load(){let[a,u,p]=await Promise.all([api("account?select=*&order=id.asc&limit=1"),api("users?select=*&order=name.asc"),api("payments?select=*&order=month.desc")]);if(a[0])D.account=a[0];D.users=u;D.payments=p;D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});$("brand").textContent=D.account.site_title;$("sync").textContent=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dba").textContent=a.length+" row";$("dbu").textContent=u.length+" rows";$("dbp").textContent=p.length+" rows"}
+async function load(){let[a,u,p]=await Promise.all([api("account?select=*&order=id.asc&limit=1"),api("users?select=*&order=name.asc"),api("payments?select=*&order=month.desc")]);if(a&&a[0])D.account=a[0];D.users=Array.isArray(u)?u:[];D.payments=Array.isArray(p)?p:[];D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});$("brand").textContent=D.account.site_title;$("sync").textContent=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dba").textContent=a.length+" row";$("dbu").textContent=u.length+" rows";$("dbp").textContent=p.length+" rows"}
 function msg(id,t,ok=true){let e=$(id);e.textContent=t;e.style.color=ok?"#a3a9ae":"#ff8989";e.classList.remove("hide");setTimeout(()=>e.classList.add("hide"),3500)}
 function page(id){document.querySelectorAll(".page").forEach(e=>e.classList.toggle("active",e.id===id));document.querySelectorAll(".nav").forEach(e=>e.classList.toggle("active",e.dataset.p===id))}
 function openApp(id){who=id;$("login").classList.add("hide");$("app").classList.remove("hide");$("app").classList.toggle("user",id!=="admin");let u=D.users.find(x=>x.id===id);$("role").textContent=id==="admin"?"Administrator":"Member";$("hello").textContent=id==="admin"?"Admin dashboard":"Hi, "+(u?.name||"");$("lead").textContent=id==="admin"?"Manage payments, users, settings, and database data.":"View your account information and payment history.";render();page("overview")}
@@ -162,7 +175,7 @@ function months(){let out=[],[y,m]=String(D.account.history_start||"2026-07").sp
 function render(){let k=cur();$("email").textContent=L.accountEmail;renderPw();$("mu").textContent=D.users.filter(u=>u.enabled).length;$("mp").textContent=D.users.filter(u=>status(u,k)==="Paid").length;$("mn").textContent=D.users.filter(u=>status(u,k)==="Unpaid").length;renderPayments();renderUsers();renderSettings()}
 function renderPw(){$("pw").textContent=pwVisible?L.accountPassword:"•".repeat(Math.min(16,L.accountPassword.length));$("showpw").textContent=pwVisible?"Hide":"Show"}
 function renderPayments(){
-  if(session==="admin"){
+  if(who==="admin"){
     $("adminPayTools").classList.remove("hide");
     $("userPaymentView").innerHTML="";
     const uf=$("payFilterUser"), keep=uf.value;
@@ -171,7 +184,7 @@ function renderPayments(){
     renderAdminPaymentEditor();
   }else{
     $("adminPayTools").classList.add("hide");
-    const u=D.users.find(x=>x.id===session);
+    const u=D.users.find(x=>x.id===who);
     if(!u){$("userPaymentView").innerHTML="";return}
     const ks=months().slice().reverse();
     $("userPaymentView").innerHTML='<div class="table"><table><thead><tr><th>Month</th><th>Status</th></tr></thead><tbody>'+
@@ -196,14 +209,80 @@ async function deleteAdminPayment(id){
   catch(e){msg("payMsg","Delete failed: "+e.message,false)}
 }
 async function addAdminPayment(){
-  const user=$("payFilterUser")?.value||D.users[0]?.id,month=$("payFilterMonth")?.value||cur();
-  if(!user)return msg("payMsg","Create a user first.",false);
+  let user=$("payFilterUser")?.value||"";
+  let month=$("payFilterMonth")?.value||cur();
+  if(!D.users.length)return msg("payMsg","Create a user first.",false);
+  if(!user){
+    user=D.users[0].id;
+    $("payFilterUser").value=user;
+  }
+  if(!$("payFilterMonth").value)$("payFilterMonth").value=month;
   try{
     const found=await api("payments?user_id=eq."+encodeURIComponent(user)+"&month=eq."+encodeURIComponent(month)+"&select=id");
     if(found?.length)return msg("payMsg","That payment data point already exists.",false);
     await api("payments",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({user_id:user,month,status:"Paid"})});
     await reloadDatabase("payments");msg("payMsg","Payment data point added.");
   }catch(e){msg("payMsg","Add failed: "+e.message,false)}
+}
+
+function openCreateUser(){
+  createStep=1;
+  ["newName","newId","newPin"].forEach(id=>{if($(id))$(id).value=""});
+  if($("newDue"))$("newDue").value="15";
+  if($("newEnabled"))$("newEnabled").value="true";
+  if($("createUserMsg"))$("createUserMsg").classList.add("hide");
+  updateCreateStep();
+  $("createUserModal").classList.remove("hide");
+  setTimeout(()=>$("newName")?.focus(),0);
+}
+function closeCreateUser(){$("createUserModal").classList.add("hide")}
+function updateCreateStep(){
+  [1,2,3].forEach(n=>{
+    $("createPane"+n)?.classList.toggle("on",n===createStep);
+    $("cs"+n)?.classList.toggle("on",n<=createStep);
+  });
+  $("createBack").style.visibility=createStep===1?"hidden":"visible";
+  $("createNext").textContent=createStep===3?"Create user":"Next";
+  $("createSubtitle").textContent=createStep===1?"Name and ID":createStep===2?"Login and billing":"Review account";
+  if(createStep===3){
+    const name=$("newName").value.trim(),id=$("newId").value.trim().toLowerCase(),pin=$("newPin").value,due=$("newDue").value;
+    $("newUserSummary").innerHTML=`<div class="r"><b>Name</b><span>${esc(name)}</span></div><div class="r"><b>User ID</b><span>${esc(id)}</span></div><div class="r"><b>PIN</b><span>${esc(pin)}</span></div><div class="r"><b>Due day</b><span>${esc(due)}</span></div><div class="r"><b>Access</b><span>${$("newEnabled").value==="true"?"Enabled":"Disabled"}</span></div>`;
+  }
+}
+function validateCreateStep(){
+  if(createStep===1){
+    const name=$("newName").value.trim();
+    const id=$("newId").value.trim().toLowerCase().replace(/\s+/g,"-");
+    $("newId").value=id;
+    if(!name)return msg("createUserMsg","Enter a name.",false),false;
+    if(!/^[a-z0-9_-]+$/.test(id))return msg("createUserMsg","User ID can only use letters, numbers, - and _.",false),false;
+    if(D.users.some(u=>u.id===id))return msg("createUserMsg","That User ID already exists.",false),false;
+  }
+  if(createStep===2){
+    const pin=String($("newPin").value||"").replace(/\D/g,"").slice(0,5);
+    const due=parseInt($("newDue").value,10);
+    $("newPin").value=pin;
+    if(!/^\d{5}$/.test(pin))return msg("createUserMsg","Enter a 5-digit PIN.",false),false;
+    if(!Number.isInteger(due)||due<1||due>31)return msg("createUserMsg","Due day must be between 1 and 31.",false),false;
+  }
+  $("createUserMsg").classList.add("hide");return true;
+}
+async function createUser(){
+  if(!validateCreateStep())return;
+  const id=$("newId").value.trim().toLowerCase(),name=$("newName").value.trim();
+  const pin=String($("newPin").value).replace(/\D/g,"").slice(0,5);
+  const due=parseInt($("newDue").value,10),enabled=$("newEnabled").value==="true";
+  const btn=$("createNext");btn.disabled=true;btn.textContent="Creating…";
+  try{
+    const existing=await api("users?id=eq."+encodeURIComponent(id)+"&select=id");
+    if(existing?.length)throw new Error("That User ID already exists.");
+    await api("users",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({id,name,due_day:due,enabled,login_pin:pin})});
+    L.pins[id]=pin;try{localStorage.setItem("portalLocal",JSON.stringify(L))}catch(e){}
+    await load();selectedEditUser=id;render();closeCreateUser();
+    if($("editUserSelect"))$("editUserSelect").value=id;
+    fillUserEditor();msg("userMsg","User created.");
+  }catch(e){msg("createUserMsg","Could not create user: "+e.message,false)}
+  finally{btn.disabled=false;btn.textContent="Create user"}
 }
 function renderUsers(){
   const sel=$("editUserSelect");if(!sel)return;
@@ -369,15 +448,15 @@ if($("createUserModal"))$("createUserModal").addEventListener("click",e=>{if(e.t
     if(validAdmin||validUser)openApp(remembered);
     else render();
     // Database is now loaded: immediately paint the fresh rows.
-    if(session)render();
+    if(who)render();
   }catch(e){
     // Keep login available even if storage/cookies/database features are unavailable.
   }
 
   totp();
   setInterval(totp,1000);
-  document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&session){try{await load();render()}catch(e){}}});
-  window.addEventListener("focus",async()=>{if(session){try{await load();render()}catch(e){}}});
+  document.addEventListener("visibilitychange",async()=>{if(!document.hidden&&who){try{await load();render()}catch(e){}}});
+  window.addEventListener("focus",async()=>{if(who){try{await load();render()}catch(e){}}});
 })();</script>
 <script>
 window.addEventListener("DOMContentLoaded",function(){
