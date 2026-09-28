@@ -8,7 +8,7 @@
 <section id="overview" class="page active"><div class="ey" id="role"></div><h1 id="hello">Dashboard</h1><p id="lead" class="lead"></p><div class="grid admin"><div class="card"><div class="muted">Enabled users</div><div id="mu" class="metric">—</div></div><div class="card"><div class="muted">Paid this month</div><div id="mp" class="metric">—</div></div><div class="card"><div class="muted">Needs payment</div><div id="mn" class="metric">—</div></div></div><div class="card section rows"><div class="head"><h2>Account information</h2></div><div class="r"><div><div class="muted">Email</div><div id="email"></div></div><button class="btn copy" data-c="email">Copy</button></div><div class="r"><div><div class="muted">Password</div><div id="pw" class="secret"></div></div><div><button id="showpw" class="btn">Show</button> <button class="btn copy" data-c="pw">Copy</button></div></div><div class="r"><div><div class="muted">2FA code</div><div id="code" class="secret totp">------</div><div id="count" class="muted"></div></div><button class="btn copy" data-c="totp">Copy</button></div></div></section>
 <section id="payments" class="page"><div class="ey">Billing</div><h1>Payments</h1><p class="lead">Live monthly payment status.</p><div class="card admin"><div class="head"><h2>Payment manager</h2><button id="refresh" class="btn">Refresh</button></div><div class="form"><div class="field"><label>User</label><select id="payUser"></select></div><div class="field"><label>Month</label><input id="payMonth" type="month"></div><div class="field"><label>Status</label><select id="payStatus"><option value="Paid">Paid</option><option value="Auto">Auto / remove paid override</option></select></div></div><div class="actions"><button id="savePay" class="btn primary">Save payment</button></div><div id="payMsg" class="msg hide"></div></div><div id="payTable" class="section"></div></section>
 <section id="users" class="page admin"><div class="ey">Admin</div><h1>User editor</h1><p class="lead">Choose a user, then view and edit their account information.</p>
-<div class="card"><div class="field"><label>Select user</label><select id="editUserSelect"></select></div></div>
+<div class="card"><div class="field"><label>Select user</label><select id="editUserSelect"></select></div><div class="actions"><button id="newUserBtn" class="btn">+ New user</button></div></div>
 <div id="userEditor" class="card section">
   <div class="head"><div><h2 id="editUserHeading">User overview</h2><div id="editUserSub" class="muted"></div></div><span id="editUserStatus"></span></div>
   <div class="tabs"><button id="userInfoTab" class="tab active">Info</button><button id="userPaymentsTab" class="tab">Payments</button></div>
@@ -69,11 +69,29 @@ function renderUsers(){
   const sel=$("editUserSelect");
   const previous=selectedEditUser||sel.value||D.users[0]?.id;
   sel.innerHTML=D.users.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} (${esc(u.id)})</option>`).join("");
-  if(D.users.some(u=>u.id===previous))sel.value=previous;
+  if(selectedEditUser==="__new__"){
+    sel.insertAdjacentHTML("afterbegin",'<option value="__new__">New user</option>');
+    sel.value="__new__";
+  }else if(D.users.some(u=>u.id===previous))sel.value=previous;
   selectedEditUser=sel.value||D.users[0]?.id||null;
   fillUserEditor();
 }
 function fillUserEditor(){
+  if(selectedEditUser==="__new__"){
+    $("editUserHeading").textContent="New user";
+    $("editUserSub").textContent="Create a portal user";
+    $("editUserStatus").innerHTML="";
+    $("editUserId").value="";
+    $("editUserName").value="";
+    $("editUserPin").value="";
+    $("editUserDue").value=15;
+    $("editUserEnabled").value="true";
+    $("editUserPayment").value="Not Due";
+    $("editUserPaidMonths").textContent="None";
+    $("editUserHistoryStart").textContent=label(D.account.history_start||"2026-07");
+    $("simpleUserPayment").innerHTML='<p class="muted">Save the user first to view payment history.</p>';
+    return;
+  }
   const u=D.users.find(x=>x.id===selectedEditUser);if(!u)return;
   $("editUserHeading").textContent=u.name;
   $("editUserSub").textContent="Account overview";
@@ -104,22 +122,38 @@ function setUserTab(which){
 function renderSettings(){$("sTitle").value=D.account.site_title;$("sHistory").value=D.account.history_start;$("sLoad").value=D.account.loading_ms;$("sAdmin").value=L.adminPassword;$("sEmail").value=L.accountEmail;$("sPw").value=L.accountPassword}
 async function savePay(){try{let u=$("payUser").value,m=$("payMonth").value;if($("payStatus").value==="Paid")await api("payments?on_conflict=user_id,month",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({user_id:u,month:m,status:"Paid"})});else await api(`payments?user_id=eq.${encodeURIComponent(u)}&month=eq.${encodeURIComponent(m)}`,{method:"DELETE"});await load();render();msg("payMsg","Payment updated.")}catch(e){msg("payMsg","Update failed: "+e.message,false)}}
 async function saveSelectedUser(){
-  const oldId=selectedEditUser, newId=$("editUserId").value.trim().toLowerCase(), name=$("editUserName").value.trim(), pin=$("editUserPin").value.trim(), due=+$("editUserDue").value, enabled=$("editUserEnabled").value==="true";
+  const creating=selectedEditUser==="__new__";
+  const oldId=selectedEditUser;
+  const newId=$("editUserId").value.trim().toLowerCase().replace(/\s+/g,"-");
+  const name=$("editUserName").value.trim();
+  // Normalize pasted/full-width/whitespace input before validation.
+  const pin=String($("editUserPin").value||"").normalize("NFKC").replace(/\D/g,"");
+  const due=parseInt($("editUserDue").value,10);
+  const enabled=$("editUserEnabled").value==="true";
+  $("editUserPin").value=pin.slice(0,5);
+
   if(!newId||!name)return msg("userMsg","User ID and name are required.",false);
-  if(!/^\\d{5}$/.test(pin))return msg("userMsg","Login PIN must be exactly 5 digits.",false);
-  if(due<1||due>31)return msg("userMsg","Due day must be between 1 and 31.",false);
+  if(pin.length!==5)return msg("userMsg","PIN must be 5 numbers long.",false);
+  if(!Number.isInteger(due)||due<1||due>31)return msg("userMsg","Due day must be between 1 and 31.",false);
+  if(!/^[a-z0-9_-]+$/.test(newId))return msg("userMsg","User ID can only use letters, numbers, - and _.",false);
+  if(D.users.some(u=>u.id===newId && (creating||u.id!==oldId)))return msg("userMsg","That User ID is already in use.",false);
+
   try{
-    // Database-backed profile fields.
-    await api("users?id=eq."+encodeURIComponent(oldId),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({id:newId,name,due_day:due,enabled})});
-    // PINs remain in the portal's local login configuration.
-    if(newId!==oldId){L.pins[newId]=pin;delete L.pins[oldId]}else L.pins[oldId]=pin;
-    localStorage.setItem("portalLocal",JSON.stringify(L));
+    if(creating){
+      await api("users",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({id:newId,name,due_day:due,enabled})});
+    }else{
+      await api("users?id=eq."+encodeURIComponent(oldId),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({id:newId,name,due_day:due,enabled})});
+    }
+    if(newId!==oldId && !creating)delete L.pins[oldId];
+    L.pins[newId]=pin;
+    try{localStorage.setItem("portalLocal",JSON.stringify(L))}catch(e){}
     selectedEditUser=newId;
-    await load();render();$("editUserSelect").value=newId;fillUserEditor();msg("userMsg","User information saved.");
+    await load();render();
+    $("editUserSelect").value=newId;fillUserEditor();
+    msg("userMsg",creating?"User created.":"User information saved.");
   }catch(e){
-    // Keep the PIN edit even when the database blocks a profile-field update.
-    L.pins[oldId]=pin;localStorage.setItem("portalLocal",JSON.stringify(L));
-    msg("userMsg","PIN saved in this portal. Database profile update failed: "+e.message,false);
+    // If database permissions reject creation/update, do not falsely report success.
+    msg("userMsg","Could not save user: "+e.message,false);
   }
 }
 async function saveSettings(){L.adminPassword=$("sAdmin").value;L.accountEmail=$("sEmail").value;L.accountPassword=$("sPw").value;if(!/^\d{5}$/.test(String(L.adminPin||""))){msg("settingsMsg","Admin PIN must be exactly 5 digits.",false);return}
@@ -128,7 +162,9 @@ function b32(s){let A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",bits="",o=[];for(let c 
 async function totp(){try{let c=Math.floor(Date.now()/30000),buf=new ArrayBuffer(8),v=new DataView(buf);v.setUint32(4,c,false);let k=await crypto.subtle.importKey("raw",b32(L.totpSecret),{name:"HMAC",hash:"SHA-1"},false,["sign"]),s=new Uint8Array(await crypto.subtle.sign("HMAC",k,buf)),o=s[19]&15,n=((s[o]&127)<<24|(s[o+1]&255)<<16|(s[o+2]&255)<<8|(s[o+3]&255))%1e6;$("code").textContent=String(n).padStart(6,"0");$("count").textContent="Refreshes in "+(30-Math.floor(Date.now()/1000)%30)+"s"}catch{$("code").textContent="------"}}
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>page(b.dataset.p));$("loginBtn").onclick=login;
 $("loginInput").oninput=e=>{e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""};
-$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{try{localStorage.removeItem("portalSession")}catch(e){}location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};$("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=()=>setUserTab("payments");$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings; $("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
+$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{try{localStorage.removeItem("portalSession")}catch(e){}location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};$("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};
+$("newUserBtn").onclick=()=>{selectedEditUser="__new__";renderUsers();setUserTab("info");$("editUserName").focus()};
+$("editUserPin").oninput=e=>{e.target.value=String(e.target.value||"").normalize("NFKC").replace(/\D/g,"").slice(0,5)};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=()=>setUserTab("payments");$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings; $("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
 (async()=>{
   // Show the login UI immediately; no loading screen.
   $("login").classList.remove("hide");
