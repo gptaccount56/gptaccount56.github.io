@@ -19,7 +19,7 @@
 <section id="payments" class="page">
 <div class="adminManager">
   <div class="ey">Admin</div>
-  <div class="head"><div><h1>Payments</h1><p class="lead">Manage the payment data stored in the database.</p></div><button id="reloadPaymentsBtn" class="btn">↻ Reload</button></div>
+  <div class="head"><div><h1>Payments</h1><p class="lead">Saved data points are editable. Unpaid and Not Due are calculated automatically.</p></div><button id="reloadPaymentsBtn" class="btn">↻ Reload database</button></div>
   <div id="adminPayTools" class="admin">
     <div class="card">
       <div class="adminPaymentGrid">
@@ -27,7 +27,7 @@
         <div class="field"><label>Filter by month</label><input id="payFilterMonth" type="month"></div>
         <button id="clearPayFilters" class="btn">Clear filters</button>
       </div>
-      <div class="actions"><button id="adminAddPay" class="btn primary">+ Add payment</button></div>
+      <div class="actions"><button id="adminAddPay" class="btn primary">+ Add payment data point</button></div>
     </div>
     <div id="adminPaymentEditor" class="section"></div>
     <div id="payMsg" class="msg hide"></div>
@@ -35,31 +35,39 @@
   <div id="userPaymentView"></div>
 </div>
 </section>
-<section id="users" class="page admin"><div class="ey">Admin</div><div class="head"><div><h1>User editor</h1><p class="lead">Choose a user, then view and edit their account information.</p></div><button class="btn dbReload" data-reload="users">↻ Reload</button></div>
-<div class="card"><div class="head"><div class="field" style="flex:1"><label>Select existing user</label><select id="editUserSelect"></select></div><button id="newUserBtn" class="btn primary">+ Create user</button></div></div>
-<div id="userEditor" class="card section">
-  <div class="head"><div><h2 id="editUserHeading">User overview</h2><div id="editUserSub" class="muted"></div></div><span id="editUserStatus"></span></div>
-  <div class="tabs"><button id="userInfoTab" class="tab active">Info</button><button id="userPaymentsTab" class="tab">Payment statuses</button></div>
-  <div id="userInfoPane" class="userpane active">
-  <div class="form">
-    <div class="field"><label>User ID</label><input id="editUserId"></div>
-    <div class="field"><label>Display name</label><input id="editUserName"></div>
-    <div class="field"><label>Login PIN / password</label><input id="editUserPin" inputmode="numeric" maxlength="5"></div>
-    <div class="field"><label>Payment due day</label><input id="editUserDue" type="number" min="1" max="31"></div>
-    <div class="field"><label>Account access</label><select id="editUserEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-    <div class="field"><label>Current month payment</label><input id="editUserPayment" readonly></div>
+<section id="users" class="page admin">
+<div class="adminManager">
+  <div class="ey">Admin</div>
+  <div class="head"><div><h1>Users</h1><p class="lead">Manage login, access, due dates, and each user's payment status.</p></div><button id="reloadUsersBtn" class="btn">↻ Reload database</button></div>
+  <div class="card">
+    <div class="adminToolbar">
+      <div class="field"><label>Select user</label><select id="editUserSelect"></select></div>
+      <button id="newUserBtn" class="btn primary">+ Create user</button>
+    </div>
   </div>
-  <div class="section rows">
-    <div class="r"><div><div class="muted">Paid months</div><div id="editUserPaidMonths"></div></div></div>
-    <div class="r"><div><div class="muted">History starts</div><div id="editUserHistoryStart"></div></div></div>
+  <div id="userEditor" class="adminDataCard section">
+    <div class="head"><div><h2 id="editUserHeading">User</h2><div id="editUserSub" class="muted"></div></div><span id="editUserStatus"></span></div>
+    <div class="adminTabs"><button id="userInfoTab" class="tab active">User info</button><button id="userPaymentsTab" class="tab">Payment statuses</button></div>
+    <div id="userInfoPane" class="userpane active">
+      <div class="form">
+        <div class="field"><label>User ID</label><input id="editUserId"></div>
+        <div class="field"><label>Display name</label><input id="editUserName"></div>
+        <div class="field"><label>5-digit login PIN</label><input id="editUserPin" inputmode="numeric" maxlength="5"></div>
+        <div class="field"><label>Payment due day</label><input id="editUserDue" type="number" min="1" max="31"></div>
+        <div class="field"><label>Account access</label><select id="editUserEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+        <div class="field"><label>Current payment status</label><input id="editUserPayment" readonly></div>
+      </div>
+      <div class="section rows">
+        <div class="r"><div><div class="muted">Saved paid months</div><div id="editUserPaidMonths"></div></div></div>
+        <div class="r"><div><div class="muted">History starts</div><div id="editUserHistoryStart"></div></div></div>
+      </div>
+      <div class="actions"><button id="saveSelectedUser" class="btn primary">Save changes</button><button id="reloadSelectedUser" class="btn">↻ Reload</button></div>
+    </div>
+    <div id="userPaymentsPane" class="userpane"><div id="simpleUserPayment"></div></div>
+    <div id="userMsg" class="msg hide"></div>
   </div>
-  <div class="actions"><button id="saveSelectedUser" class="btn primary">Save user</button><button id="reloadSelectedUser" class="btn">Reload</button></div>
-  </div>
-  <div id="userPaymentsPane" class="userpane">
-    <div id="simpleUserPayment"></div>
-  </div>
-  <div id="userMsg" class="msg hide"></div>
-</div></section>
+</div>
+</section>
 <section id="settings" class="page admin"><div class="ey">Admin</div><h1>Settings</h1><p class="lead">Portal and account configuration.</p><div class="card"><div class="form"><div class="field"><label>Site title</label><input id="sTitle"></div><div class="field"><label>History starts</label><input id="sHistory" type="month"></div><div class="field"><label>Loading time (ms)</label><input id="sLoad" type="number" min="0" max="10000"></div><div class="field"><label>Admin password</label><input id="sAdmin" type="password"></div><div class="field"><label>Account email</label><input id="sEmail"></div><div class="field"><label>Account password</label><input id="sPw" type="password"></div></div><div class="actions"><button id="saveSettings" class="btn primary">Save settings</button><button id="resetSettings" class="btn">Reset local settings</button></div><div id="settingsMsg" class="msg hide"></div></div></section>
 <section id="database" class="page admin"><div class="ey">Admin</div><div class="head"><div><h1>Database</h1></div><button class="btn dbReload" data-reload="database">↻ Reload</button></div><p class="lead">Supabase connection status.</p><div class="grid"><div class="card"><div class="muted">Connection</div><div class="metric" style="font-size:19px"><span class="dot"></span>Connected</div></div><div class="card"><div class="muted">Project</div><div class="metric" style="font-size:17px">sqyz…wkmj</div></div><div class="card"><div class="muted">Last sync</div><div id="sync" class="metric" style="font-size:17px">—</div></div></div><div class="card section rows"><div class="r"><div><b>account</b><div class="muted">Portal settings</div></div><span id="dba">—</span></div><div class="r"><div><b>users</b><div class="muted">Members and due dates</div></div><span id="dbu">—</span></div><div class="r"><div><b>payments</b><div class="muted">Paid month records</div></div><span id="dbp">—</span></div><div class="actions"><button id="testDb" class="btn">Test connection</button></div><div id="dbMsg" class="msg hide"></div></div></section>
 </main></div></section>
@@ -203,6 +211,13 @@ async function addAdminPayment(){
     await load();render();msg("payMsg","Data point added.");
   }catch(e){msg("payMsg","Could not add data point: "+e.message,false)}
 }
+function renderUsers(){
+  const sel=$("editUserSelect");if(!sel)return;
+  if(!selectedEditUser||!D.users.some(u=>u.id===selectedEditUser))selectedEditUser=D.users[0]?.id||"";
+  sel.innerHTML=D.users.map(u=>`<option value="${esc(u.id)}"${u.id===selectedEditUser?" selected":""}>${esc(u.name)} (${esc(u.id)})</option>`).join("");
+  $("userEditor").classList.toggle("hide",!selectedEditUser);
+  if(selectedEditUser)fillUserEditor();
+}
 function fillUserEditor(){
   const u=D.users.find(x=>x.id===selectedEditUser);if(!u)return;
   $("editUserHeading").textContent=u.name;
@@ -220,21 +235,17 @@ function fillUserEditor(){
 }
 function renderSimpleUserPayment(u){
   const ks=months().slice().reverse();
-  let h='<div class="head"><div><strong>Payment statuses</strong><div class="tiny">Fresh from the database when this tab is opened.</div></div><button id="reloadUserPayments" class="btn">↻ Reload</button></div>';
+  let h='<div class="head"><div><strong>Payment statuses</strong><div class="tiny">Reloads from the database when you open this tab.</div></div><button id="reloadUserPayments" class="btn">↻ Reload</button></div>';
   h+='<div class="table"><table><thead><tr><th>Month</th><th>Status</th><th>Saved data point</th><th></th></tr></thead><tbody>';
   ks.forEach(k=>{
     const point=D.payments.find(p=>p.user_id===u.id&&p.month===k);
-    h+=`<tr><td>${esc(label(k))}</td><td>${pill(status(u,k))}</td><td>${point?'<select class="payPointEdit" data-month="'+esc(k)+'"><option value="Paid">Paid</option></select>':'<span class="muted">Auto</span>'}</td><td style="text-align:right">${point?'<button class="deletePay" data-month="'+esc(k)+'" title="Delete data point">×</button>':''}</td></tr>`;
+    h+=`<tr><td>${esc(label(k))}</td><td>${pill(status(u,k))}</td><td>${point?'<strong>Paid</strong>':'<span class="muted">Auto</span>'}</td><td style="text-align:right">${point?'<button class="deletePay userDeletePoint" data-month="'+esc(k)+'" title="Delete saved payment">×</button>':''}</td></tr>`;
   });
-  h+='</tbody></table></div><div class="actions"><button id="addPayPoint" class="btn primary">+ Add current month payment</button></div>';
+  h+='</tbody></table></div><div class="actions"><input id="userAddMonth" type="month" value="'+esc(cur())+'" style="height:40px;background:#101214;color:#fff;border:1px solid var(--l);border-radius:9px;padding:0 10px"><button id="addPayPoint" class="btn primary">+ Add paid data point</button></div>';
   $("simpleUserPayment").innerHTML=h;
-  if($("reloadUserPayments"))$("reloadUserPayments").onclick=()=>reloadDatabase("userpayments");
-  if($("addPayPoint"))$("addPayPoint").onclick=()=>addUserPaymentPoint(u.id);
-  $("simpleUserPayment").querySelectorAll(".payPointEdit").forEach(el=>el.onchange=()=>updateUserPaymentPoint(u.id,el.dataset.month,el.value));
-  $("simpleUserPayment").querySelectorAll(".deletePay").forEach(el=>el.onclick=()=>deleteUserPayment(u.id,el.dataset.month));
 }
-async function addUserPaymentPoint(userId){
-  const month=cur();
+async function addUserPaymentPoint(userId,chosenMonth){
+  const month=chosenMonth||cur();
   try{
     await api("payments?on_conflict=user_id,month",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:userId,month,status:"Paid"})});
     await refreshUserPayments(userId,"Payment data point added.");
@@ -301,120 +312,47 @@ async function saveSettings(){L.adminPassword=$("sAdmin").value;L.accountEmail=$
     localStorage.setItem("portalLocal",JSON.stringify(L));try{await api("account?id=eq."+D.account.id,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({site_title:$("sTitle").value||"GPT Account Portal",history_start:$("sHistory").value||"2026-07",loading_ms:+$("sLoad").value||0})});await load();render();msg("settingsMsg","Settings saved.")}catch(e){render();msg("settingsMsg","Browser settings saved. Database settings were not changed: "+e.message,false)}}
 function b32(s){let A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",bits="",o=[];for(let c of s.replace(/=|\s/g,"").toUpperCase()){let v=A.indexOf(c);if(v>=0)bits+=v.toString(2).padStart(5,"0")}for(let i=0;i+8<=bits.length;i+=8)o.push(parseInt(bits.slice(i,i+8),2));return new Uint8Array(o)}
 async function totp(){try{let c=Math.floor(Date.now()/30000),buf=new ArrayBuffer(8),v=new DataView(buf);v.setUint32(4,c,false);let k=await crypto.subtle.importKey("raw",b32(L.totpSecret),{name:"HMAC",hash:"SHA-1"},false,["sign"]),s=new Uint8Array(await crypto.subtle.sign("HMAC",k,buf)),o=s[19]&15,n=((s[o]&127)<<24|(s[o+1]&255)<<16|(s[o+2]&255)<<8|(s[o+3]&255))%1e6;$("code").textContent=String(n).padStart(6,"0");$("count").textContent="Refreshes in "+(30-Math.floor(Date.now()/1000)%30)+"s"}catch{$("code").textContent="------"}}
-document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>page(b.dataset.p));$("loginBtn").onclick=login;
-$("loginInput").oninput=e=>{e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""};
-$("loginInput").onkeydown=e=>{if(e.key==="Enter")login()};$("logout").onclick=()=>{clearRememberedLogin();location.reload()};$("showpw").onclick=()=>{pwVisible=!pwVisible;renderPw()};if($("savePay"))$("savePay").onclick=savePay;$("refresh").onclick=async()=>{await load();render()};
-let createStep=1;
-function openCreateUser(){
-  createStep=1;
-  $("newName").value="";$("newId").value="";$("newPin").value="";$("newDue").value=15;$("newEnabled").value="true";
-  $("createUserMsg").classList.add("hide");
-  $("createUserModal").classList.remove("hide");
-  updateCreateStep();
-  setTimeout(()=>$("newName").focus(),50);
-}
-function closeCreateUser(){$("createUserModal").classList.add("hide")}
-function updateCreateStep(){
-  [1,2,3].forEach(n=>{$("createPane"+n).classList.toggle("on",n===createStep);$("cs"+n).classList.toggle("on",n<=createStep)});
-  $("createBack").style.visibility=createStep===1?"hidden":"visible";
-  $("createNext").textContent=createStep===3?"Create user":"Next";
-  $("createSubtitle").textContent=createStep===1?"Start with the basics.":createStep===2?"Set login and payment details.":"Confirm everything looks right.";
-  if(createStep===3)renderNewUserSummary();
-}
-function cleanNewPin(){
-  const pin=String($("newPin").value||"").normalize("NFKC").replace(/\D/g,"").slice(0,5);
-  $("newPin").value=pin;return pin;
-}
-function validateCreateStep(){
-  if(createStep===1){
-    const name=$("newName").value.trim(), id=$("newId").value.trim().toLowerCase().replace(/\s+/g,"-");
-    $("newId").value=id;
-    if(!name||!id){msg("createUserMsg","Enter a name and User ID.",false);return false}
-    if(!/^[a-z0-9_-]+$/.test(id)){msg("createUserMsg","User ID can only use letters, numbers, - and _.",false);return false}
-    if(D.users.some(u=>u.id===id)){msg("createUserMsg","That User ID already exists.",false);return false}
-  }
-  if(createStep===2){
-    const pin=cleanNewPin(), due=parseInt($("newDue").value,10);
-    if(!/^\d{5}$/.test(pin)){msg("createUserMsg","Enter exactly 5 numbers for the PIN.",false);return false}
-    if(!Number.isInteger(due)||due<1||due>31){msg("createUserMsg","Choose a due day from 1 to 31.",false);return false}
-  }
-  $("createUserMsg").classList.add("hide");return true;
-}
-function renderNewUserSummary(){
-  const enabled=$("newEnabled").value==="true";
-  $("newUserSummary").innerHTML=
-    `<div class="r"><div><div class="muted">Name</div><strong>${esc($("newName").value.trim())}</strong></div></div>`+
-    `<div class="r"><div><div class="muted">User ID</div><strong>${esc($("newId").value.trim())}</strong></div></div>`+
-    `<div class="r"><div><div class="muted">Login PIN</div><strong>${esc(cleanNewPin())}</strong></div></div>`+
-    `<div class="r"><div><div class="muted">Due day</div><strong>${esc($("newDue").value)}</strong></div></div>`+
-    `<div class="r"><div><div class="muted">Access</div><strong>${enabled?"Enabled":"Disabled"}</strong></div></div>`;
-}
-async function createUser(){
-  if(!validateCreateStep())return;
-  const id=$("newId").value.trim(), name=$("newName").value.trim(), pin=cleanNewPin(), due=parseInt($("newDue").value,10), enabled=$("newEnabled").value==="true";
-  $("createNext").disabled=true;$("createNext").textContent="Creating…";
-  try{
-    // Re-check the live database in case the ID was created since the wizard opened.
-    const existing=await api("users?id=eq."+encodeURIComponent(id)+"&select=id");
-    if(Array.isArray(existing)&&existing.length){
-      msg("createUserMsg","That User ID already exists. Choose a different User ID.",false);
-      createStep=1;updateCreateStep();$("newId").focus();return;
-    }
-    await api("users",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({id,name,due_day:due,enabled,login_pin:pin})});
-    L.pins[id]=pin;try{localStorage.setItem("portalLocal",JSON.stringify(L))}catch(e){}
-    selectedEditUser=id;await load();render();closeCreateUser();
-    $("editUserSelect").value=id;fillUserEditor();setUserTab("info");msg("userMsg","User created.");
-  }catch(e){
-    const em=String(e&&e.message||e);
-    if(em.includes("23505")||em.toLowerCase().includes("duplicate key")){
-      msg("createUserMsg","That User ID already exists. Choose a different User ID.",false);
-      createStep=1;updateCreateStep();
-    }else msg("createUserMsg","Could not create user: "+em,false);
-  }
-  finally{$("createNext").disabled=false;$("createNext").textContent=createStep===3?"Create user":"Next"}
-}
-if($("editUserSelect"))$("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};
-async function reloadDatabase(area){
-  const buttons=[...document.querySelectorAll(".dbReload")];
-  buttons.forEach(b=>{b.classList.add("loading");b.disabled=true});
-  try{
-    const keepUser=selectedEditUser;
-    await load();
-    render();
-    if(keepUser&&D.users.some(u=>u.id===keepUser)){
-      selectedEditUser=keepUser;
-      if($("editUserSelect"))$("editUserSelect").value=keepUser;
-      fillUserEditor();
-      if(area==="userpayments")setUserTab("payments");
-    }
-    const target=area==="payments"?"payMsg":area==="users"||area==="userpayments"?"userMsg":null;
-    if(target&&$(target))msg(target,"Database reloaded.");
-  }catch(e){
-    const target=area==="payments"?"payMsg":"userMsg";
-    if($(target))msg(target,"Could not reload database: "+e.message,false);
-  }finally{
-    buttons.forEach(b=>{b.classList.remove("loading");b.disabled=false});
-  }
-}
-document.querySelectorAll(".dbReload").forEach(b=>b.onclick=()=>reloadDatabase(b.dataset.reload));
-if($("payFilterUser"))$("payFilterUser").onchange=renderAdminPaymentEditor;
-if($("payFilterMonth"))$("payFilterMonth").onchange=renderAdminPaymentEditor;
-if($("clearPayFilters"))$("clearPayFilters").onclick=()=>{$("payFilterUser").value="";$("payFilterMonth").value="";renderAdminPaymentEditor()};
-if($("adminAddPay"))$("adminAddPay").onclick=addAdminPayment;
-if($("newUserBtn"))$("newUserBtn").onclick=openCreateUser;
-if($("closeCreateUser"))$("closeCreateUser").onclick=closeCreateUser;
-if($("createCancel"))$("createCancel").onclick=closeCreateUser;
-if($("createBack"))$("createBack").onclick=()=>{if(createStep>1){createStep--;updateCreateStep()}};
-if($("createNext"))$("createNext").onclick=()=>{if(createStep<3){if(validateCreateStep()){createStep++;updateCreateStep()}}else createUser()};
-if($("newPin"))$("newPin").oninput=cleanNewPin;
-if($("createUserModal"))$("createUserModal").onclick=e=>{if(e.target===$("createUserModal"))closeCreateUser()};
-$("editUserPin").oninput=e=>{e.target.value=String(e.target.value||"").normalize("NFKC").replace(/\D/g,"").slice(0,5)};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=async()=>{
-  setUserTab("payments");
-  const b=$("userPaymentsTab");b.disabled=true;b.textContent="Loading…";
-  try{await load();render();$("editUserSelect").value=selectedEditUser;fillUserEditor();setUserTab("payments")}
-  catch(e){msg("userMsg","Could not reload database: "+e.message,false)}
-  finally{b.disabled=false;b.textContent="Payment statuses"}
-};$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings; $("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.classList.contains("nav")){page(b.dataset.p);return}
+  if(b.id==="loginBtn"){login();return}
+  if(b.id==="logout"){clearRememberedLogin();location.reload();return}
+  if(b.id==="showpw"){pwVisible=!pwVisible;renderPw();return}
+  if(b.id==="refresh"){try{await load();render()}catch(err){}return}
+  if(b.id==="reloadPaymentsBtn"){await reloadDatabase("payments");return}
+  if(b.id==="reloadUsersBtn"){await reloadDatabase("users");return}
+  if(b.id==="clearPayFilters"){if($("payFilterUser"))$("payFilterUser").value="";if($("payFilterMonth"))$("payFilterMonth").value="";renderAdminPaymentEditor();return}
+  if(b.id==="adminAddPay"){await addAdminPayment();return}
+  if(b.classList.contains("adminDeletePay")){await deleteAdminPayment(b.dataset.user,b.dataset.month);return}
+  if(b.id==="newUserBtn"){openCreateUser();return}
+  if(b.id==="closeCreateUser"||b.id==="createCancel"){closeCreateUser();return}
+  if(b.id==="createBack"){if(createStep>1){createStep--;updateCreateStep()}return}
+  if(b.id==="createNext"){if(createStep<3){if(validateCreateStep()){createStep++;updateCreateStep()}}else await createUser();return}
+  if(b.id==="userInfoTab"){setUserTab("info");return}
+  if(b.id==="userPaymentsTab"){setUserTab("payments");await reloadDatabase("userpayments");return}
+  if(b.id==="saveSelectedUser"){await saveSelectedUser();return}
+  if(b.id==="reloadSelectedUser"){await reloadDatabase("users");return}
+  if(b.id==="reloadUserPayments"){await reloadDatabase("userpayments");return}
+  if(b.id==="addPayPoint"){if(selectedEditUser)await addUserPaymentPoint(selectedEditUser,$("userAddMonth")?.value);return}
+  if(b.classList.contains("userDeletePoint")){if(selectedEditUser)await deleteUserPayment(selectedEditUser,b.dataset.month);return}
+  if(b.id==="saveSettings"){await saveSettings();return}
+  if(b.id==="resetSettings"){localStorage.removeItem("portalLocal");location.reload();return}
+  if(b.id==="testDb"){try{await load();render();msg("dbMsg","Connection successful.")}catch(err){msg("dbMsg","Connection failed: "+err.message,false)}return}
+  if(b.classList.contains("copy")){let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}}
+});
+document.addEventListener("change",async e=>{
+  const t=e.target;
+  if(t.id==="editUserSelect"){selectedEditUser=t.value;fillUserEditor();setUserTab("info");return}
+  if(t.id==="payFilterUser"||t.id==="payFilterMonth"){renderAdminPaymentEditor();return}
+  if(t.classList.contains("adminPayUser")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.value,t.dataset.oldmonth);return}
+  if(t.classList.contains("adminPayMonth")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.dataset.olduser,t.value);return}
+});
+document.addEventListener("input",e=>{
+  if(e.target.id==="loginInput"){e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""}
+  if(e.target.id==="editUserPin"||e.target.id==="newPin")e.target.value=String(e.target.value||"").normalize("NFKC").replace(/\D/g,"").slice(0,5);
+});
+document.addEventListener("keydown",e=>{if(e.target.id==="loginInput"&&e.key==="Enter")login()});
+if($("createUserModal"))$("createUserModal").addEventListener("click",e=>{if(e.target===$("createUserModal"))closeCreateUser()});
 (async()=>{
   // Show the login UI immediately; no loading screen.
   $("login").classList.remove("hide");
@@ -457,26 +395,6 @@ window.addEventListener("DOMContentLoaded",function(){
   }
 });
 
-// Stable admin controls: delegated handlers keep working after render() replaces content.
-document.addEventListener("click",async function(e){
-  const t=e.target.closest("button");
-  if(!t)return;
-  if(t.id==="reloadPaymentsBtn"){await reloadDatabase("payments");return}
-  if(t.id==="clearPayFilters"){
-    if($("payFilterUser"))$("payFilterUser").value="";
-    if($("payFilterMonth"))$("payFilterMonth").value="";
-    renderAdminPaymentEditor();return;
-  }
-  if(t.id==="adminAddPay"){await addAdminPayment();return}
-  if(t.classList.contains("adminDeletePay")){await deleteAdminPayment(t.dataset.user,t.dataset.month);return}
-  if(t.id==="reloadUserPayments"){await reloadDatabase("userpayments");return}
-});
-document.addEventListener("change",async function(e){
-  const t=e.target;
-  if(t.id==="payFilterUser"||t.id==="payFilterMonth"){renderAdminPaymentEditor();return}
-  if(t.classList.contains("adminPayUser")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.value,t.dataset.oldmonth);return}
-  if(t.classList.contains("adminPayMonth")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.dataset.olduser,t.value);return}
-});
 </script>
 
 
