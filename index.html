@@ -35,6 +35,41 @@
 <section id="settings" class="page admin"><div class="ey">Admin</div><h1>Settings</h1><p class="lead">Portal and account configuration.</p><div class="card"><div class="form"><div class="field"><label>Site title</label><input id="sTitle"></div><div class="field"><label>History starts</label><input id="sHistory" type="month"></div><div class="field"><label>Loading time (ms)</label><input id="sLoad" type="number" min="0" max="10000"></div><div class="field"><label>Admin password</label><input id="sAdmin" type="password"></div><div class="field"><label>Account email</label><input id="sEmail"></div><div class="field"><label>Account password</label><input id="sPw" type="password"></div></div><div class="actions"><button id="saveSettings" class="btn primary">Save settings</button><button id="resetSettings" class="btn">Reset local settings</button></div><div id="settingsMsg" class="msg hide"></div></div></section>
 <section id="database" class="page admin"><div class="ey">Admin</div><h1>Database</h1><p class="lead">Supabase connection status.</p><div class="grid"><div class="card"><div class="muted">Connection</div><div class="metric" style="font-size:19px"><span class="dot"></span>Connected</div></div><div class="card"><div class="muted">Project</div><div class="metric" style="font-size:17px">sqyz…wkmj</div></div><div class="card"><div class="muted">Last sync</div><div id="sync" class="metric" style="font-size:17px">—</div></div></div><div class="card section rows"><div class="r"><div><b>account</b><div class="muted">Portal settings</div></div><span id="dba">—</span></div><div class="r"><div><b>users</b><div class="muted">Members and due dates</div></div><span id="dbu">—</span></div><div class="r"><div><b>payments</b><div class="muted">Paid month records</div></div><span id="dbp">—</span></div><div class="actions"><button id="testDb" class="btn">Test connection</button></div><div id="dbMsg" class="msg hide"></div></div></section>
 </main></div></section>
+<div id="createUserModal" class="createModal hide">
+  <div class="createBox">
+    <div class="createTop">
+      <div><h2>Create user</h2><div class="muted" id="createSubtitle">Set up their account.</div></div>
+      <button id="closeCreateUser" class="iconBtn" aria-label="Close">×</button>
+    </div>
+    <div class="createSteps"><div id="cs1" class="createStep on"></div><div id="cs2" class="createStep"></div><div id="cs3" class="createStep"></div></div>
+
+    <div id="createPane1" class="createPane on">
+      <div class="createFields">
+        <div class="field"><label>Name</label><input id="newName" autocomplete="off" placeholder="e.g. Antone"></div>
+        <div class="field"><label>User ID</label><input id="newId" autocomplete="off" placeholder="e.g. antone"><div class="tiny">Used internally to identify the user.</div></div>
+      </div>
+    </div>
+
+    <div id="createPane2" class="createPane">
+      <div class="createFields">
+        <div class="field"><label>5-digit login PIN</label><input id="newPin" type="tel" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00000"></div>
+        <div class="field"><label>Payment due day</label><input id="newDue" type="number" min="1" max="31" value="15"></div>
+        <div class="field"><label>Account access</label><select id="newEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+      </div>
+    </div>
+
+    <div id="createPane3" class="createPane">
+      <div class="muted" style="margin-bottom:10px">Review the new account.</div>
+      <div id="newUserSummary" class="createSummary"></div>
+    </div>
+
+    <div id="createUserMsg" class="msg hide"></div>
+    <div class="createFoot">
+      <button id="createBack" class="btn" style="visibility:hidden">Back</button>
+      <div class="createFootRight"><button id="createCancel" class="btn">Cancel</button><button id="createNext" class="btn primary">Next</button></div>
+    </div>
+  </div>
+</div>
 <script>
 const C={"url": "https://sqyzrwweppxwdqndwkmj.supabase.co", "key": "sb_publishable_63SdwJ_jls5p3biBOaObhg_pHEJ9z2h", "admin": "admin123", "email": "gpt.dance632@passinbox.com", "password": "GooningToJennyMod", "totp": "I64G6ZKYTWMEOGDWJ67QRVZRS2K3JUAK", "pins": {"antone": "58321", "vincent": "74196", "gabe": "32684", "enzo": "91547"}};let savedLocal={};try{savedLocal=JSON.parse(localStorage.getItem("portalLocal")||"{}")}catch(e){}
 let L=Object.assign({adminPin:"00000",adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins},savedLocal);
@@ -183,7 +218,7 @@ async function createUser(){
   const id=$("newId").value.trim(), name=$("newName").value.trim(), pin=cleanNewPin(), due=parseInt($("newDue").value,10), enabled=$("newEnabled").value==="true";
   $("createNext").disabled=true;$("createNext").textContent="Creating…";
   try{
-    await api("users",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({id,name,due_day:due,enabled})});
+    await api("users",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({id,name,due_day:due,enabled})});
     L.pins[id]=pin;try{localStorage.setItem("portalLocal",JSON.stringify(L))}catch(e){}
     selectedEditUser=id;await load();render();closeCreateUser();
     $("editUserSelect").value=id;fillUserEditor();setUserTab("info");msg("userMsg","User created.");
@@ -191,12 +226,13 @@ async function createUser(){
   finally{$("createNext").disabled=false;$("createNext").textContent=createStep===3?"Create user":"Next"}
 }
 $("editUserSelect").onchange=()=>{selectedEditUser=$("editUserSelect").value;fillUserEditor();setUserTab("info")};
-$("newUserBtn").onclick=openCreateUser;
-$("closeCreateUser").onclick=closeCreateUser;$("createCancel").onclick=closeCreateUser;
-$("createBack").onclick=()=>{if(createStep>1){createStep--;updateCreateStep()}};
-$("createNext").onclick=()=>{if(createStep<3){if(validateCreateStep()){createStep++;updateCreateStep()}}else createUser()};
-$("newPin").oninput=cleanNewPin;
-$("createUserModal").onclick=e=>{if(e.target===$("createUserModal"))closeCreateUser()};
+if($("newUserBtn"))$("newUserBtn").onclick=openCreateUser;
+if($("closeCreateUser"))$("closeCreateUser").onclick=closeCreateUser;
+if($("createCancel"))$("createCancel").onclick=closeCreateUser;
+if($("createBack"))$("createBack").onclick=()=>{if(createStep>1){createStep--;updateCreateStep()}};
+if($("createNext"))$("createNext").onclick=()=>{if(createStep<3){if(validateCreateStep()){createStep++;updateCreateStep()}}else createUser()};
+if($("newPin"))$("newPin").oninput=cleanNewPin;
+if($("createUserModal"))$("createUserModal").onclick=e=>{if(e.target===$("createUserModal"))closeCreateUser()};
 $("editUserPin").oninput=e=>{e.target.value=String(e.target.value||"").normalize("NFKC").replace(/\D/g,"").slice(0,5)};$("userInfoTab").onclick=()=>setUserTab("info");$("userPaymentsTab").onclick=()=>setUserTab("payments");$("saveSelectedUser").onclick=saveSelectedUser;$("reloadSelectedUser").onclick=()=>fillUserEditor();$("saveSettings").onclick=saveSettings; $("setAdmin").oninput=e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("testDb").onclick=async()=>{try{await load();render();msg("dbMsg","Connection successful.")}catch(e){msg("dbMsg","Connection failed: "+e.message,false)}};$("resetSettings").onclick=()=>{localStorage.removeItem("portalLocal");L={adminPassword:C.admin,accountEmail:C.email,accountPassword:C.password,totpSecret:C.totp,pins:C.pins};render();msg("settingsMsg","Local settings reset.")};document.querySelectorAll(".copy").forEach(b=>b.onclick=async()=>{let t=b.dataset.c==="email"?L.accountEmail:b.dataset.c==="pw"?L.accountPassword:$("code").textContent;try{await navigator.clipboard.writeText(t);b.textContent="Copied";setTimeout(()=>b.textContent="Copy",800)}catch{}});
 (async()=>{
   // Show the login UI immediately; no loading screen.
@@ -236,39 +272,5 @@ window.addEventListener("DOMContentLoaded",function(){
 </script>
 
 
-<div id="createUserModal" class="createModal hide">
-  <div class="createBox">
-    <div class="createTop">
-      <div><h2>Create user</h2><div class="muted" id="createSubtitle">Set up their account.</div></div>
-      <button id="closeCreateUser" class="iconBtn" aria-label="Close">×</button>
-    </div>
-    <div class="createSteps"><div id="cs1" class="createStep on"></div><div id="cs2" class="createStep"></div><div id="cs3" class="createStep"></div></div>
 
-    <div id="createPane1" class="createPane on">
-      <div class="createFields">
-        <div class="field"><label>Name</label><input id="newName" autocomplete="off" placeholder="e.g. Antone"></div>
-        <div class="field"><label>User ID</label><input id="newId" autocomplete="off" placeholder="e.g. antone"><div class="tiny">Used internally to identify the user.</div></div>
-      </div>
-    </div>
-
-    <div id="createPane2" class="createPane">
-      <div class="createFields">
-        <div class="field"><label>5-digit login PIN</label><input id="newPin" type="tel" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="00000"></div>
-        <div class="field"><label>Payment due day</label><input id="newDue" type="number" min="1" max="31" value="15"></div>
-        <div class="field"><label>Account access</label><select id="newEnabled"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
-      </div>
-    </div>
-
-    <div id="createPane3" class="createPane">
-      <div class="muted" style="margin-bottom:10px">Review the new account.</div>
-      <div id="newUserSummary" class="createSummary"></div>
-    </div>
-
-    <div id="createUserMsg" class="msg hide"></div>
-    <div class="createFoot">
-      <button id="createBack" class="btn" style="visibility:hidden">Back</button>
-      <div class="createFootRight"><button id="createCancel" class="btn">Cancel</button><button id="createNext" class="btn primary">Next</button></div>
-    </div>
-  </div>
-</div>
 </body></html>
