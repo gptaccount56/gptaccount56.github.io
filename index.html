@@ -112,11 +112,16 @@ let L=Object.assign({adminPin:"00000",adminPassword:C.admin,accountEmail:C.email
 if(!/^\d{5}$/.test(String(L.adminPin||"")))L.adminPin="00000";L.pins=Object.assign({},C.pins,L.pins||{});
 let D={account:{id:1,site_title:"GPT Account Portal",history_start:"2026-07",loading_ms:1000},users:[],payments:[]},who=null,pwVisible=false;
 const $=x=>document.getElementById(x), esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function api(path,opt={}){let r=await fetch(C.url+"/rest/v1/"+path,{...opt,headers:{apikey:C.key,"Content-Type":"application/json",...(opt.headers||{})}});if(!r.ok)throw Error((await r.text())||r.status);let t=await r.text();return t?JSON.parse(t):null}
-const mk=(y,m)=>y+"-"+String(m+1).padStart(2,"0"),cur=()=>{let d=new Date;return mk(d.getFullYear(),d.getMonth())},label=k=>new Date(k+"-02T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
-function status(u,k){if(!u.enabled)return"N/A";if(D.payments.some(p=>p.user_id===u.id&&p.month===k))return"Paid";if(k<cur())return"Unpaid";if(k>cur())return"Not Due";return new Date().getDate()<Math.min(+u.due_day,new Date(+k.slice(0,4),+k.slice(5,7),0).getDate())?"Not Due":"Unpaid"}
-const pill=s=>`<span class="pill ${s.replaceAll(" ","")}">${esc(s)}</span>`;
-async function load(){let[a,u,p]=await Promise.all([api("account?select=*&order=id.asc&limit=1"),api("users?select=*&order=name.asc"),api("payments?select=*&order=month.desc")]);if(a[0])D.account=a[0];D.users=u;D.payments=p;D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});$("brand").textContent=D.account.site_title;$("sync").textContent=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dba").textContent=a.length+" row";$("dbu").textContent=u.length+" rows";$("dbp").textContent=p.length+" rows"}
+async function api(path,opt={}){
+  const headers={apikey:C.key,Authorization:"Bearer "+C.key,...(opt.headers||{})};
+  if(opt.body&&!headers["Content-Type"])headers["Content-Type"]="application/json";
+  const res=await fetch(C.url+"/rest/v1/"+path,{...opt,headers});
+  const raw=await res.text();
+  if(!res.ok){let detail=raw;try{const j=JSON.parse(raw);detail=j.message||j.details||raw}catch(e){}throw new Error(detail||("HTTP "+res.status))}
+  if(!raw)return null;
+  try{return JSON.parse(raw)}catch(e){return raw}
+}
+async function load(){let[a,u,p]=await Promise.all([api("account?select=*&order=id.asc&limit=1"),api("users?select=*&order=name.asc"),api("payments?select=*&order=month.desc")]);if(a[0])D.account=a[0];D.users=u;D.payments=p;D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});D.users.forEach(x=>{if(x.login_pin)L.pins[x.id]=String(x.login_pin)});$("brand").textContent=D.account.site_title;$("sync").textContent=new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});$("dba").textContent=a.length+" row";$("dbu").textContent=u.length+" rows";$("dbp").textContent=p.length+" rows"}
 function msg(id,t,ok=true){let e=$(id);e.textContent=t;e.style.color=ok?"#a3a9ae":"#ff8989";e.classList.remove("hide");setTimeout(()=>e.classList.add("hide"),3500)}
 function page(id){document.querySelectorAll(".page").forEach(e=>e.classList.toggle("active",e.id===id));document.querySelectorAll(".nav").forEach(e=>e.classList.toggle("active",e.dataset.p===id))}
 function openApp(id){who=id;$("login").classList.add("hide");$("app").classList.remove("hide");$("app").classList.toggle("user",id!=="admin");let u=D.users.find(x=>x.id===id);$("role").textContent=id==="admin"?"Administrator":"Member";$("hello").textContent=id==="admin"?"Admin dashboard":"Hi, "+(u?.name||"");$("lead").textContent=id==="admin"?"Manage payments, users, settings, and database data.":"View your account information and payment history.";render();page("overview")}
@@ -174,42 +179,31 @@ function renderPayments(){
   }
 }
 function renderAdminPaymentEditor(){
-  const userFilter=$("payFilterUser").value, monthFilter=$("payFilterMonth").value;
-  let rows=D.payments.slice().sort((a,b)=>b.month.localeCompare(a.month)||a.user_id.localeCompare(b.user_id));
-  if(userFilter)rows=rows.filter(p=>p.user_id===userFilter);
-  if(monthFilter)rows=rows.filter(p=>p.month===monthFilter);
-  if(!rows.length){$("adminPaymentEditor").innerHTML='<div class="card payEmpty">No saved data points match these filters.</div>';return}
-  let h='<div class="table payEditorTable"><table><thead><tr><th>User</th><th>Month</th><th>Data point</th><th></th></tr></thead><tbody>';
-  rows.forEach(p=>{
-    const u=D.users.find(x=>x.id===p.user_id);
-    h+=`<tr><td><select class="adminPayUser" data-id="${p.id}" data-olduser="${esc(p.user_id)}" data-oldmonth="${esc(p.month)}">${D.users.map(x=>`<option value="${esc(x.id)}"${x.id===p.user_id?" selected":""}>${esc(x.name)}</option>`).join("")}</select></td><td><input class="adminPayMonth" data-id="${p.id}" data-olduser="${esc(p.user_id)}" data-oldmonth="${esc(p.month)}" type="month" value="${esc(p.month)}"></td><td><select class="adminPayStatus" disabled><option>Paid</option></select></td><td style="text-align:right"><button class="deletePay adminDeletePay" data-user="${esc(p.user_id)}" data-month="${esc(p.month)}" title="Delete data point">×</button></td></tr>`;
-  });
-  $("adminPaymentEditor").innerHTML=h+'</tbody></table></div>';
-  $("adminPaymentEditor").querySelectorAll(".adminPayUser").forEach(el=>el.onchange=()=>moveAdminPayment(el.dataset.olduser,el.dataset.oldmonth,el.value,el.dataset.oldmonth));
-  $("adminPaymentEditor").querySelectorAll(".adminPayMonth").forEach(el=>el.onchange=()=>moveAdminPayment(el.dataset.olduser,el.dataset.oldmonth,el.dataset.olduser,el.value));
-  $("adminPaymentEditor").querySelectorAll(".adminDeletePay").forEach(el=>el.onclick=()=>deleteAdminPayment(el.dataset.user,el.dataset.month));
+  const box=$("adminPaymentEditor");if(!box)return;
+  const uf=$("payFilterUser")?.value||"",mf=$("payFilterMonth")?.value||"";
+  let rows=D.payments.slice().sort((x,y)=>y.month.localeCompare(x.month)||x.user_id.localeCompare(y.user_id));
+  if(uf)rows=rows.filter(x=>x.user_id===uf);if(mf)rows=rows.filter(x=>x.month===mf);
+  if(!rows.length){box.innerHTML='<div class="card payEmpty">No saved payment data points match these filters.</div>';return}
+  box.innerHTML='<div class="table"><table><thead><tr><th>User</th><th>Month</th><th>Status</th><th></th></tr></thead><tbody>'+
+  rows.map(p=>`<tr><td><select class="adminPayUser" data-id="${p.id}">${D.users.map(u=>`<option value="${esc(u.id)}"${u.id===p.user_id?" selected":""}>${esc(u.name)}</option>`).join("")}</select></td><td><input class="adminPayMonth" data-id="${p.id}" type="month" value="${esc(p.month)}"></td><td>${pill("Paid")}</td><td style="text-align:right"><button class="deletePay adminDeletePay" data-id="${p.id}">×</button></td></tr>`).join("")+'</tbody></table></div>';
 }
-async function moveAdminPayment(oldUser,oldMonth,newUser,newMonth){
-  if(!newUser||!newMonth)return;
-  try{
-    await api("payments?user_id=eq."+encodeURIComponent(oldUser)+"&month=eq."+encodeURIComponent(oldMonth),{method:"DELETE",headers:{Prefer:"return=minimal"}});
-    await api("payments?on_conflict=user_id,month",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:newUser,month:newMonth,status:"Paid"})});
-    await load();render();msg("payMsg","Data point updated.");
-  }catch(e){msg("payMsg","Could not update data point: "+e.message,false)}
+async function patchPayment(id,changes){
+  try{await api("payments?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify(changes)});await reloadDatabase("payments");msg("payMsg","Payment updated.")}
+  catch(e){msg("payMsg","Update failed: "+e.message,false);await reloadDatabase("payments")}
 }
-async function deleteAdminPayment(userId,month){
-  try{
-    await api("payments?user_id=eq."+encodeURIComponent(userId)+"&month=eq."+encodeURIComponent(month),{method:"DELETE",headers:{Prefer:"return=minimal"}});
-    await load();render();msg("payMsg","Data point deleted.");
-  }catch(e){msg("payMsg","Could not delete data point: "+e.message,false)}
+async function deleteAdminPayment(id){
+  try{await api("payments?id=eq."+encodeURIComponent(id),{method:"DELETE",headers:{Prefer:"return=minimal"}});await reloadDatabase("payments");msg("payMsg","Payment deleted.")}
+  catch(e){msg("payMsg","Delete failed: "+e.message,false)}
 }
 async function addAdminPayment(){
-  const user=$("payFilterUser").value||D.users[0]?.id, month=$("payFilterMonth").value||cur();
+  const user=$("payFilterUser")?.value||D.users[0]?.id,month=$("payFilterMonth")?.value||cur();
   if(!user)return msg("payMsg","Create a user first.",false);
   try{
-    await api("payments?on_conflict=user_id,month",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:user,month,status:"Paid"})});
-    await load();render();msg("payMsg","Data point added.");
-  }catch(e){msg("payMsg","Could not add data point: "+e.message,false)}
+    const found=await api("payments?user_id=eq."+encodeURIComponent(user)+"&month=eq."+encodeURIComponent(month)+"&select=id");
+    if(found?.length)return msg("payMsg","That payment data point already exists.",false);
+    await api("payments",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify({user_id:user,month,status:"Paid"})});
+    await reloadDatabase("payments");msg("payMsg","Payment data point added.");
+  }catch(e){msg("payMsg","Add failed: "+e.message,false)}
 }
 function renderUsers(){
   const sel=$("editUserSelect");if(!sel)return;
@@ -239,7 +233,7 @@ function renderSimpleUserPayment(u){
   h+='<div class="table"><table><thead><tr><th>Month</th><th>Status</th><th>Saved data point</th><th></th></tr></thead><tbody>';
   ks.forEach(k=>{
     const point=D.payments.find(p=>p.user_id===u.id&&p.month===k);
-    h+=`<tr><td>${esc(label(k))}</td><td>${pill(status(u,k))}</td><td>${point?'<strong>Paid</strong>':'<span class="muted">Auto</span>'}</td><td style="text-align:right">${point?'<button class="deletePay userDeletePoint" data-month="'+esc(k)+'" title="Delete saved payment">×</button>':''}</td></tr>`;
+    h+=`<tr><td>${esc(label(k))}</td><td>${pill(status(u,k))}</td><td>${point?'<strong>Paid</strong>':'<span class="muted">Auto</span>'}</td><td style="text-align:right">${point?'<button class="deletePay userDeletePoint" data-id="'+point.id+'" data-month="'+esc(k)+'" title="Delete saved payment">×</button>':''}</td></tr>`;
   });
   h+='</tbody></table></div><div class="actions"><input id="userAddMonth" type="month" value="'+esc(cur())+'" style="height:40px;background:#101214;color:#fff;border:1px solid var(--l);border-radius:9px;padding:0 10px"><button id="addPayPoint" class="btn primary">+ Add paid data point</button></div>';
   $("simpleUserPayment").innerHTML=h;
@@ -323,7 +317,7 @@ document.addEventListener("click",async e=>{
   if(b.id==="reloadUsersBtn"){await reloadDatabase("users");return}
   if(b.id==="clearPayFilters"){if($("payFilterUser"))$("payFilterUser").value="";if($("payFilterMonth"))$("payFilterMonth").value="";renderAdminPaymentEditor();return}
   if(b.id==="adminAddPay"){await addAdminPayment();return}
-  if(b.classList.contains("adminDeletePay")){await deleteAdminPayment(b.dataset.user,b.dataset.month);return}
+  if(b.classList.contains("adminDeletePay")){await deleteAdminPayment(b.dataset.id);return}
   if(b.id==="newUserBtn"){openCreateUser();return}
   if(b.id==="closeCreateUser"||b.id==="createCancel"){closeCreateUser();return}
   if(b.id==="createBack"){if(createStep>1){createStep--;updateCreateStep()}return}
@@ -334,7 +328,7 @@ document.addEventListener("click",async e=>{
   if(b.id==="reloadSelectedUser"){await reloadDatabase("users");return}
   if(b.id==="reloadUserPayments"){await reloadDatabase("userpayments");return}
   if(b.id==="addPayPoint"){if(selectedEditUser)await addUserPaymentPoint(selectedEditUser,$("userAddMonth")?.value);return}
-  if(b.classList.contains("userDeletePoint")){if(selectedEditUser)await deleteUserPayment(selectedEditUser,b.dataset.month);return}
+  if(b.classList.contains("userDeletePoint")){try{await api("payments?id=eq."+encodeURIComponent(b.dataset.id),{method:"DELETE",headers:{Prefer:"return=minimal"}});await reloadDatabase("userpayments");msg("userMsg","Payment deleted.")}catch(err){msg("userMsg","Delete failed: "+err.message,false)}return}
   if(b.id==="saveSettings"){await saveSettings();return}
   if(b.id==="resetSettings"){localStorage.removeItem("portalLocal");location.reload();return}
   if(b.id==="testDb"){try{await load();render();msg("dbMsg","Connection successful.")}catch(err){msg("dbMsg","Connection failed: "+err.message,false)}return}
@@ -344,8 +338,8 @@ document.addEventListener("change",async e=>{
   const t=e.target;
   if(t.id==="editUserSelect"){selectedEditUser=t.value;fillUserEditor();setUserTab("info");return}
   if(t.id==="payFilterUser"||t.id==="payFilterMonth"){renderAdminPaymentEditor();return}
-  if(t.classList.contains("adminPayUser")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.value,t.dataset.oldmonth);return}
-  if(t.classList.contains("adminPayMonth")){await moveAdminPayment(t.dataset.olduser,t.dataset.oldmonth,t.dataset.olduser,t.value);return}
+  if(t.classList.contains("adminPayUser")){await patchPayment(t.dataset.id,{user_id:t.value});return}
+  if(t.classList.contains("adminPayMonth")){await patchPayment(t.dataset.id,{month:t.value});return}
 });
 document.addEventListener("input",e=>{
   if(e.target.id==="loginInput"){e.target.value=e.target.value.replace(/\D/g,"").slice(0,5);$("loginErr").textContent=""}
